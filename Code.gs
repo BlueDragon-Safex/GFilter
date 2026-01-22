@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.2.8
+ * @version 1.2.9
  * @date 2026-01-21
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -50,6 +50,7 @@
  * v1.2.6 (2026-01-21): Automation Picklist - Upgraded trigger setup to a professional HTML choice dialog.
  * v1.2.7 (2026-01-21): Premium Radio UI - Switched to radio buttons with enhanced spacing and padding.
  * v1.2.8 (2026-01-21): Final UI Polish - Increased modal height for a scroll-free experience.
+ * v1.2.9 (2026-01-21): Auto-Branding - Forced rename to "My GFilter™" during initial setup.
  */
 
 const CONFIG = {
@@ -60,7 +61,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.2.8';
+const VERSION = 'v1.2.9';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -429,6 +430,35 @@ function logAction(msg) {
 /**
  * The main automation engine. Scans Inbox for mail matching the GSheet rules.
  */
+function setupLabels() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  
+  // Auto-Branding: Rename if this is a fresh copy
+  const currentName = ss.getName();
+  if (currentName.indexOf('Copy of') > -1 || currentName.indexOf('TEMPLATE') > -1) {
+    ss.rename('My GFilter™');
+  }
+
+  const labelsToCreate = CONFIG.ACTIONS.map(a => `${CONFIG.LABEL_ROOT}/${a}`);
+  labelsToCreate.forEach(labelName => {
+    try {
+      GmailApp.createLabel(labelName);
+    } catch (e) {
+      // Label might already exist, ignore error
+    }
+  });
+  
+  // Create root label if it doesn't exist
+  try {
+    GmailApp.createLabel(CONFIG.LABEL_ROOT);
+  } catch (e) {
+    // Root label might already exist, ignore error
+  }
+
+  ui.alert('GFilter Setup', 'Initial labels have been created in Gmail. You can now start tagging emails with __auto/ labels!', ui.ButtonSet.OK);
+}
+
 function applyRules() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const ruleSheet = ss.getSheetByName(CONFIG.SHEET_RULES);
