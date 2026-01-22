@@ -95,8 +95,12 @@ function onOpen() {
     .addToUi();
 }
 
-  // No multi-select logic in v1.5.0. 
-  // Native single-pick chips are now managed by Google Sheets.
+/**
+ * onEdit trigger shell for future extensions. 
+ * Multi-select logic is handled natively by Google Sheets Chips in v1.5.0+.
+ */
+function onEdit(e) {
+  // Categorical Engine uses single-pick native chips.
 }
 
 /**
