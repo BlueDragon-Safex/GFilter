@@ -393,6 +393,7 @@ function incrementStat(key, val) {
   props.setProperty(key, (current + val).toString());
 }
 
+/**
  * Logic for rule execution (Categorical Model).
  */
 function executeAction(thread, keep, action, label, additionalLabels) {
