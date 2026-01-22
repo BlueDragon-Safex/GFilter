@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.2.1
+ * @version 1.2.2
  * @date 2026-01-21
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -19,12 +19,6 @@
  * This code is provided for personal use only. Redistribution, resale, or 
  * incorporation of this code (in part or in whole) into any other platform, 
  * software, or service is STRICTLY PROHIBITED. 
- * 
- * 123 PROPERTY INVESTMENT GROUP, INC. aggressively monitors for unauthorized 
- * distribution and will pursue all available legal remedies, including 
- * injunctive relief and monetary damages (statutory and actual), along with 
- * all associated legal fees, against any individual or entity found in 
- * violation of these terms.
  * 
  * CHANGE LOG:
  * v1.0.0 (2026-01-21): Initial prototype release.
@@ -49,6 +43,7 @@
  * v1.1.9 (2026-01-21): Final Release Candidate - Verifying the resilient update delivery system.
  * v1.2.0 (2026-01-21): Bulletproof Release - Fixed "Double Code" leak by escaping HTML tags in delivery.
  * v1.2.1 (2026-01-21): Pro Update Engine - Used JSON.stringify for "Native" safe code delivery.
+ * v1.2.2 (2026-01-21): Release Candidate - Final polishing and legal header refinement.
  */
 
 const CONFIG = {
@@ -59,7 +54,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.2.1';
+const VERSION = 'v1.2.2';
 
 /**
  * Adds a custom menu to the Google Sheet.
