@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.6.1
+ * @version 1.7.0
  * @date 2026-01-22
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -64,6 +64,7 @@
  * v1.5.2 (2026-01-21): Deep Sync - Scans up to 300 threads for robust rule ingestion.
  * v1.6.0 (2026-01-22): Persistent Engine - Retroactive labeling and persistent tags.
  * v1.6.1 (2026-01-22): Precision Hotfix - ExcludeProcessed logic and Inbox priority.
+ * v1.7.0 (2026-01-22): Transparency Engine - Total Match column & Timeout Safety Watcher.
  */
 
 const CONFIG = {
@@ -74,7 +75,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.6.1';
+const VERSION = 'v1.7.0';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -290,8 +291,16 @@ function processAutoLabels() {
     const message = thread.getMessages()[0];
     const matchValue = getMatchValue(message, scopeType);
     
-    // Add Categorical Rule (9 Columns)
-    addCategoricalRule(ruleSheet, scopeType, matchValue, keepVal, actionVal, labelVal, additional);
+    // Estimate Total Match (Performance-capped at 5000)
+    let totalMatch = 0;
+    const q = getQuery(scopeType, matchValue);
+    if (q) {
+      const estimate = GmailApp.search(q, 0, 500); // Quick check
+      totalMatch = estimate.length === 500 ? '500+' : estimate.length;
+    }
+
+    // Add Categorical Rule (10 Columns)
+    addCategoricalRule(ruleSheet, scopeType, matchValue, keepVal, actionVal, labelVal, additional, totalMatch);
 
     // Labels are now PERSISTENT - No removal after ingestion.
   });
@@ -300,14 +309,13 @@ function processAutoLabels() {
   runBacklogEngine();
 }
 
-function addCategoricalRule(sheet, type, value, keep, action, label, additional) {
+function addCategoricalRule(sheet, type, value, keep, action, label, additional, totalMatch) {
   const data = sheet.getDataRange().getValues();
-  // Check existence across Source/Value/Keep/Action/Label
   const exists = data.some(row => row[0] === type && row[1] === value && row[2] === keep && row[3] === action && row[4] === label);
   
   if (!exists) {
-    // Structure: [Rule Type, Match Value, Keep, Action, Labels, Additional Labels, Date Created, Sync History, Processed Count]
-    sheet.appendRow([type, value, keep, action, label, additional, new Date(), 'Pending', 0]);
+    // Structure: [Rule Type, Match Value, Keep, Action, Labels, Additional Labels, Date Created, Sync History, Total Match, Processed Count]
+    sheet.appendRow([type, value, keep, action, label, additional, new Date(), 'Pending', totalMatch, 0]);
     SpreadsheetApp.getActiveSpreadsheet().toast(`Rule Registered: ${value}`, 'GFilter');
   }
 }
@@ -344,6 +352,7 @@ function addRule(sheet, type, value, actionStr, allLabels) {
  * Chains itself to process massive histories in the background.
  */
 function runBacklogEngine() {
+  const startTime = Date.now();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(CONFIG.SHEET_RULES);
   if (!sheet) return;
@@ -352,34 +361,33 @@ function runBacklogEngine() {
   let workDone = false;
 
   for (let i = 1; i < data.length; i++) {
-    const [type, value, keep, action, label, addit, date, status, count] = data[i];
+    // TIME-SAFE WATCHER: Stop if we've been running for more than 4 minutes (240s)
+    if (Date.now() - startTime > 240000) {
+      logAction("Time-Safe Watcher: Yielding for next pulse to prevent timeout.");
+      break;
+    }
+
+    const [type, value, keep, action, label, addit, date, status, total, count] = data[i];
     
     if (status === 'Pending' || status === 'In Progress...') {
       const batchSize = 100;
       let query = getQuery(type, value);
       if (!query) continue;
 
-      // EXCLUSION LOGIC: Don't pull threads that are ALREADY correctly labeled
-      // This prevents the engine from getting stuck at '0' processed count.
+      // EXCLUSION LOGIC
       if (label && label !== 'Inbox') query += ` -label:"${CONFIG.LABEL_ROOT}/${label}"`;
       if (keep) query += ` -label:"${CONFIG.LABEL_ROOT}/${keep}"`;
 
-      // PRIORITY 1: Process anything in the INBOX first
       let threads = GmailApp.search(`${query} label:inbox`, 0, batchSize);
-      
-      // PRIORITY 2: Process All Mail if Inbox is empty
-      if (threads.length === 0) {
-        threads = GmailApp.search(query, 0, batchSize);
-      }
+      if (threads.length === 0) threads = GmailApp.search(query, 0, batchSize);
 
       if (threads.length === 0) {
-        // Only mark complete if we find ABSOLUTELY ZERO matching threads in all mail
         sheet.getRange(i + 1, 8).setValue('Complete');
         sheet.getRange(i + 1, 8).setBackground('#d9ead3');
         continue;
       }
 
-      // 1. Batch Label Application (Massive Performance Boost)
+      // 1. Batch Label Application
       if (label && label !== 'Inbox') {
         const l = getLabelSafe(`${CONFIG.LABEL_ROOT}/${label}`);
         if (l) l.addToThreads(threads);
@@ -404,28 +412,21 @@ function runBacklogEngine() {
           case 'Star': t.addStar(); break;
           case 'Archive': t.moveToArchive(); break;
         }
-        // Always Archive if it's a labeling/retention rule and action isn't Inbox
-        if ((label || keep) && (!action || action === 'Archive')) {
-          t.moveToArchive();
-        }
+        if ((label || keep) && (!action || action === 'Archive')) t.moveToArchive();
       });
       
       const newCount = (parseInt(count) || 0) + threads.length;
-      sheet.getRange(i + 1, 9).setValue(newCount);
-      sheet.getRange(i + 1, 8).setValue('In Progress...');
+      sheet.getRange(i + 1, 10).setValue(newCount); // Column J
+      sheet.getRange(i + 1, 8).setValue('In Progress...'); // Column H
       
       SpreadsheetApp.flush(); 
-      
-      // Update Stats
       incrementStat('TOTAL_PROCESSED', threads.length);
       workDone = true;
       break; 
     }
   }
 
-  if (workDone) {
-    updateDashboard();
-  }
+  if (workDone) updateDashboard();
 }
 
 function getLabelSafe(name, autoCreate = true) {
@@ -551,7 +552,7 @@ function setupLabels() {
   }
   
   // Header/Table formatting removed - now handled by the GFilter Template.
-  const headers = ['Rule Type', 'Match Value', 'Keep', 'Action', 'Labels', 'Additional Labels', 'Date Created', 'Sync History', 'Processed Count'];
+  const headers = ['Rule Type', 'Match Value', 'Keep', 'Action', 'Labels', 'Additional Labels', 'Date Created', 'Sync History', 'Total Match', 'Processed Count'];
   const ruleSheet = getOrCreateSheet(ss, CONFIG.SHEET_RULES, headers);
   
   // Apply DATA VALIDATION (CHIPS) - Ensures chips exist if the sheet is wiped
