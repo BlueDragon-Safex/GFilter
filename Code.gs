@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.2.2
+ * @version 1.2.3
  * @date 2026-01-21
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -44,6 +44,7 @@
  * v1.2.0 (2026-01-21): Bulletproof Release - Fixed "Double Code" leak by escaping HTML tags in delivery.
  * v1.2.1 (2026-01-21): Pro Update Engine - Used JSON.stringify for "Native" safe code delivery.
  * v1.2.2 (2026-01-21): Release Candidate - Final polishing and legal header refinement.
+ * v1.2.3 (2026-01-21): Template Release - Used native Apps Script Templates for 100% reliable code delivery.
  */
 
 const CONFIG = {
@@ -54,7 +55,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.2.2';
+const VERSION = 'v1.2.3';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -113,40 +114,41 @@ function checkUpdates() {
 }
 
 function showUpdateModal(version, code) {
-  var html = '<!DOCTYPE html><html><head>' +
-             '<link rel="stylesheet" href="https://ssl.gstatic.com/docs/script/css/add-ons1.css">' +
-             '<style>' +
-             'body { font-family: sans-serif; padding: 10px; line-height: 1.4; color: #333; }' +
-             '.step { margin-bottom: 8px; font-weight: bold; }' +
-             'textarea { width: 100%; height: 280px; font-family: monospace; font-size: 11px; margin: 10px 0; border: 1px solid #ccc; padding: 5px; background: #f9f9f9; resize: none; }' +
-             '.footer { font-size: 11px; color: #888; margin-top: 10px; }' +
-             'button { background: #4285f4; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; }' +
-             'button:hover { background: #357ae8; }' +
-             '</style></head><body>' +
-             '<div class="step">✨ Version ' + version + ' is ready!</div>' +
-             '<ol style="font-size: 13px;">' +
-             '<li>Click <b>Copy to Clipboard</b> below.</li>' +
-             '<li>Go to <b>Extensions > Apps Script</b>.</li>' +
-             '<li>Delete everything in <b>Code.gs</b> and <b>Paste</b> the new code.</li>' +
-             '<li>Save and refresh this Google Sheet.</li></ol>' +
-             '<textarea id="codeBlock" readonly></textarea>' +
-             '<div style="text-align: center;">' +
-             '<button onclick="copyToClipboard()">Copy to Clipboard</button></div>' +
-             '<div class="footer">Official Source: https://github.com/BlueDragon-Safex/GFilter</div>' +
-             '<script>' +
-             '  (function() {' +
-             '    var rawCode = ' + JSON.stringify(code) + ';' +
-             '    document.getElementById("codeBlock").value = rawCode;' +
-             '  })();' +
-             '  function copyToClipboard() {' +
-             '    var copyText = document.getElementById("codeBlock");' +
-             '    copyText.select();' +
-             '    document.execCommand("copy");' +
-             '    alert("Code copied! Now go to Apps Script, delete the old code, and paste this in.");' +
-             '  }' +
-             '</script></body></html>';
-  
-  const output = HtmlService.createHtmlOutput(html)
+  const template = HtmlService.createTemplate(
+    '<!DOCTYPE html><html><head>' +
+    '<link rel="stylesheet" href="https://ssl.gstatic.com/docs/script/css/add-ons1.css">' +
+    '<style>' +
+    'body { font-family: sans-serif; padding: 10px; line-height: 1.4; color: #333; }' +
+    '.step { margin-bottom: 8px; font-weight: bold; }' +
+    'textarea { width: 95%; height: 280px; font-family: monospace; font-size: 11px; margin: 10px 0; border: 1px solid #ccc; padding: 5px; background: #f9f9f9; resize: none; }' +
+    '.footer { font-size: 11px; color: #888; margin-top: 10px; }' +
+    'button { background: #4285f4; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; }' +
+    'button:hover { background: #357ae8; }' +
+    '</style></head><body>' +
+    '<div class="step">✨ Version <?= version ?> is ready!</div>' +
+    '<ol style="font-size: 13px;">' +
+    '<li>Click <b>Copy to Clipboard</b> below.</li>' +
+    '<li>Go to <b>Extensions > Apps Script</b>.</li>' +
+    '<li>Delete everything in <b>Code.gs</b> and <b>Paste</b> the new code.</li>' +
+    '<li>Save and refresh this Google Sheet.</li></ol>' +
+    '<textarea id="codeBlock" readonly><?= code ?></textarea>' +
+    '<div style="text-align: center;">' +
+    '<button onclick="copyToClipboard()">Copy to Clipboard</button></div>' +
+    '<div class="footer">Official Source: https://github.com/BlueDragon-Safex/GFilter</div>' +
+    '<script>' +
+    '  function copyToClipboard() {' +
+    '    var copyText = document.getElementById("codeBlock");' +
+    '    copyText.select();' +
+    '    document.execCommand("copy");' +
+    '    alert("Code copied! Now go to Apps Script, delete the old code, and paste this in.");' +
+    '  }' +
+    '</script></body></html>'
+  );
+
+  template.version = version;
+  template.code = code;
+
+  const output = template.evaluate()
     .setWidth(600)
     .setHeight(550)
     .setTitle('GFilter Update Delivery: ' + version);
