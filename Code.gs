@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.1.7
+ * @version 1.1.8
  * @date 2026-01-21
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -45,6 +45,7 @@
  * v1.1.5 (2026-01-21): Production Release - Final version for current testing cycle.
  * v1.1.6 (2026-01-21): Fixed Modal Glitch - Resolved nested backtick issues in the update modal.
  * v1.1.7 (2026-01-21): Final Modal Verification Release.
+ * v1.1.8 (2026-01-21): Resilience Update - Added cache-busting & headers to resolve intermittent 404/DNS issues.
  */
 
 const CONFIG = {
@@ -55,7 +56,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.1.7';
+const VERSION = 'v1.1.8';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -76,10 +77,16 @@ function onOpen() {
 
 function checkUpdates() {
   const ui = SpreadsheetApp.getUi();
-  const rawUrl = 'https://raw.githubusercontent.com/BlueDragon-Safex/GFilter/master/Code.gs';
+  const rawUrl = 'https://raw.githubusercontent.com/BlueDragon-Safex/GFilter/master/Code.gs?t=' + new Date().getTime();
   
   try {
-    const response = UrlFetchApp.fetch(rawUrl);
+    const options = {
+      'muteHttpExceptions': true,
+      'headers': {
+        'User-Agent': 'GFilter-Update-Checker'
+      }
+    };
+    const response = UrlFetchApp.fetch(rawUrl, options);
     const content = response.getContentText();
     const remoteVersionMatch = content.match(/const VERSION = '([^']+)'/);
     
