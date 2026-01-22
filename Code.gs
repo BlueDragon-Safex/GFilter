@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.6.0
+ * @version 1.6.1
  * @date 2026-01-22
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -63,6 +63,7 @@
  * v1.5.1 (2026-01-21): Perfect Alignment - 9-column structure matching user template.
  * v1.5.2 (2026-01-21): Deep Sync - Scans up to 300 threads for robust rule ingestion.
  * v1.6.0 (2026-01-22): Persistent Engine - Retroactive labeling and persistent tags.
+ * v1.6.1 (2026-01-22): Precision Hotfix - ExcludeProcessed logic and Inbox priority.
  */
 
 const CONFIG = {
@@ -73,7 +74,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.6.0';
+const VERSION = 'v1.6.1';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -355,10 +356,29 @@ function runBacklogEngine() {
     
     if (status === 'Pending' || status === 'In Progress...') {
       const batchSize = 100;
-      const query = getQuery(type, value);
+      let query = getQuery(type, value);
       if (!query) continue;
 
-      const threads = GmailApp.search(query, 0, batchSize);
+      // EXCLUSION LOGIC: Don't pull threads that are ALREADY correctly labeled
+      // This prevents the engine from getting stuck at '0' processed count.
+      if (label && label !== 'Inbox') query += ` -label:"${CONFIG.LABEL_ROOT}/${label}"`;
+      if (keep) query += ` -label:"${CONFIG.LABEL_ROOT}/${keep}"`;
+
+      // PRIORITY 1: Process anything in the INBOX first
+      let threads = GmailApp.search(`${query} label:inbox`, 0, batchSize);
+      
+      // PRIORITY 2: Process All Mail if Inbox is empty
+      if (threads.length === 0) {
+        threads = GmailApp.search(query, 0, batchSize);
+      }
+
+      if (threads.length === 0) {
+        // Only mark complete if we find ABSOLUTELY ZERO matching threads in all mail
+        sheet.getRange(i + 1, 8).setValue('Complete');
+        sheet.getRange(i + 1, 8).setBackground('#d9ead3');
+        continue;
+      }
+
       // 1. Batch Label Application (Massive Performance Boost)
       if (label && label !== 'Inbox') {
         const l = getLabelSafe(`${CONFIG.LABEL_ROOT}/${label}`);
@@ -370,7 +390,7 @@ function runBacklogEngine() {
       }
       if (addit) {
         addit.split(',').forEach(lName => {
-          const al = getLabelSafe(lName.trim(), false); // Don't auto-create user labels under root
+          const al = getLabelSafe(lName.trim(), false); 
           if (al) al.addToThreads(threads);
         });
       }
@@ -384,7 +404,10 @@ function runBacklogEngine() {
           case 'Star': t.addStar(); break;
           case 'Archive': t.moveToArchive(); break;
         }
-        if ((label || keep) && (!action || action === 'Archive')) t.moveToArchive();
+        // Always Archive if it's a labeling/retention rule and action isn't Inbox
+        if ((label || keep) && (!action || action === 'Archive')) {
+          t.moveToArchive();
+        }
       });
       
       const newCount = (parseInt(count) || 0) + threads.length;
@@ -647,8 +670,8 @@ function updateDashboard() {
 
 function getQuery(type, value) {
   switch (type) {
-    case '{Sender}': return `from:${value}`;
-    case '{Domain}': return `from:*@${value}`;
+    case '{Sender}': return `from:(${value})`;
+    case '{Domain}': return `from:(${value})`; // No wildcard needed, domain works better raw
     case '{List}': return `list:"${value}"`;
     case '{Subject}': return `subject:"${value}"`;
     default: return '';
