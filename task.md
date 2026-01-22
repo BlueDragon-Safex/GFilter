@@ -1,0 +1,28 @@
+# GFilter (Gmail Filter) Development Task
+
+- [x] **Planning and Design**
+    - [x] Finalize Security and Packaging Strategy
+    - [x] Design GSheet Schema (Rules, Logs, Settings)
+    - [x] Define Action vs Scope logic
+- [x] **Implementation**
+    - [x] Create GSheet Setup Script (Labels creation)
+    - [x] Implement Rule Detection (Scanning `__auto` labels)
+    - [x] Implement Rule Execution (GSheet storage and application)
+    - [x] Implement Retention Policies (`KeepNx` logic)
+    - [x] Build Custom Menu for GSheet
+- [x] **Branding and Compliance**
+    - [x] Add Ownership and Copyright Headers
+    - [x] Update FAQ for Google Cloud Settings
+- [x] **Bug Fixes and Robustness**
+    - [x] Fix Label Creation Conflicts
+    - [x] Add Try-Catch to Core Actions
+    - [x] Implement 'Inbox' action (Label without Archiving)
+    - [x] Refine {CopyLabels} as a rule modifier
+    - [x] Implement selectable trigger frequency
+    - [x] Implement 'Stop All Automation' kill switch
+    - [x] Implement 'Background Backlog Engine' for mass history (20k+ emails)
+    - [x] Rename {CopyLabels} to CopyLabels (v1.0.8) for better convention
+- [x] **Polishing and Documentation**
+    - [x] Add User Instructions to GSheet
+    - [x] Create a "One-Click" setup guide
+    - [x] Final Verification
