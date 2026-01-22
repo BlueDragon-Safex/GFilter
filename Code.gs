@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.3.4
+ * @version 1.4.0
  * @date 2026-01-21
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -56,6 +56,7 @@
  * v1.3.2 (2026-01-21): Multi-Action Support - Support for combined actions (e.g., Star+Keep7d).
  * v1.3.3 (2026-01-21): Smart Table Update - New 'Auto Labels' column with onEdit multi-select logic.
  * v1.3.4 (2026-01-21): Native Chip UI - Automated high-end styled dropdowns and multi-select support.
+ * v1.4.0 (2026-01-21): Command Center - Autonomous backlog engine & Stats Dashboard.
  */
 
 const CONFIG = {
@@ -66,7 +67,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.3.4';
+const VERSION = 'v1.4.0';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -333,7 +334,6 @@ function getMatchValue(message, scopeType) {
 
 function addRule(sheet, type, value, actionStr, allLabels) {
   const data = sheet.getDataRange().getValues();
-  // Check if rule exists (Match Col A, B, and the Action string in C)
   const exists = data.some(row => row[0] === type && row[1] === value && row[2] === actionStr);
   
   if (!exists) {
@@ -341,47 +341,64 @@ function addRule(sheet, type, value, actionStr, allLabels) {
     // New Order: Type(1), Value(2), AutoLabels(3), Action(4), Additional(5), Date(6), Status(7), Count(8)
     sheet.appendRow([type, value, actionStr, '', additional, new Date(), 'Pending', 0]);
     
-    // Trigger Initial Historical Run
-    applyRuleToHistory(sheet, sheet.getLastRow(), type, value, actionStr, additional);
-    
+    // Initial sync will be handled by the background engine
+    logAction(`Rule Registered: ${value}. Backlog Engine will process history autonomously.`);
     sheet.activate();
-    SpreadsheetApp.getActiveSpreadsheet().toast(`Rule Created & Historical Sync Started for ${value}`, 'GFilter');
+    SpreadsheetApp.getActiveSpreadsheet().toast(`Rule Registered: ${value}`, 'GFilter');
   }
 }
 
 /**
- * Applies a single rule to historical emails (Processes one batch of 100).
+ * Autonomous Backlog Engine.
+ * Chains itself to process massive histories in the background.
  */
-function applyRuleToHistory(sheet, rowNum, type, value, action, additionalLabels) {
-  const query = getQuery(type, value);
-  if (!query) return;
+function runBacklogEngine() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.SHEET_RULES);
+  if (!sheet) return;
 
-  // Search for threads matching the query
-  const threads = GmailApp.search(query, 0, 100); 
-  if (threads.length === 0) {
-    sheet.getRange(rowNum, 6).setValue('Complete');
-    return;
+  const data = sheet.getDataRange().getValues();
+  let workDone = false;
+
+  for (let i = 1; i < data.length; i++) {
+    const [type, value, autoLabels, action, addit, date, status, count] = data[i];
+    
+    if (status === 'Pending' || status === 'In Progress...') {
+      const combinedAction = (autoLabels || '') + (action ? '+' + action : '');
+      const batchSize = 100;
+      const query = getQuery(type, value);
+      if (!query) continue;
+
+      const threads = GmailApp.search(query, 0, batchSize);
+      if (threads.length === 0) {
+        sheet.getRange(i + 1, 7).setValue('Complete');
+        sheet.getRange(i + 1, 7).setBackground('#d9ead3'); // Light Green
+        continue;
+      }
+
+      threads.forEach(t => executeAction(t, combinedAction));
+      
+      const newCount = (parseInt(count) || 0) + threads.length;
+      sheet.getRange(i + 1, 8).setValue(newCount);
+      sheet.getRange(i + 1, 7).setValue('In Progress...');
+      
+      // Update Stats
+      incrementStat('TOTAL_PROCESSED', threads.length);
+      workDone = true;
+      break; // One rule per batch to avoid timeouts
+    }
   }
 
-  threads.forEach(thread => {
-    try {
-      executeAction(thread, action);
-      if (additionalLabels) {
-        additionalLabels.split(',').forEach(labelName => {
-          const l = GmailApp.getUserLabelByName(labelName.trim());
-          if (l) thread.addLabel(l);
-        });
-      }
-    } catch (e) {
-      console.warn(`Backlog apply failed: ${e.message}`);
-    }
-  });
+  // Chaining Logic: If work was done, check if we need to schedule another run
+  if (workDone) {
+    updateDashboard();
+  }
+}
 
-  // Update Progress in Sheet
-  const currentCount = parseInt(sheet.getRange(rowNum, 7).getValue() || 0);
-
-  sheet.getRange(rowNum, 7).setValue(currentCount + threads.length);
-  sheet.getRange(rowNum, 6).setValue('In Progress...');
+function incrementStat(key, val) {
+  const props = PropertiesService.getScriptProperties();
+  const current = parseInt(props.getProperty(key) || 0);
+  props.setProperty(key, (current + val).toString());
 }
 
 /**
@@ -570,11 +587,44 @@ function applyRules() {
       });
     }
 
-    // 2. Process Historical Backlog (if needed)
-    if (syncStatus === 'Pending' || syncStatus === 'In Progress...') {
-      applyRuleToHistory(ruleSheet, i + 1, type, value, action, additionalLabels);
-    }
+    // 2. Process Historical Backlog (Autonomous Engine handles this now)
+    // No direct call here, background triggers will pick up 'Pending' rules.
   }
+  updateDashboard();
+}
+
+/**
+ * Orchestrates the GFilter Stats Dashboard.
+ */
+function updateDashboard() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheetName = '📊 Dashboard';
+  let sheet = ss.getSheetByName(sheetName);
+  
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName, 0);
+  }
+
+  const props = PropertiesService.getScriptProperties();
+  const totalProcessed = props.getProperty('TOTAL_PROCESSED') || 0;
+  const lastSync = new Date().toLocaleString();
+
+  // Dashboard UI (Visual Layout)
+  sheet.getRange('A1:C20').clear();
+  sheet.getRange('B3').setValue('GFilter™ Inbox Health').setFontSize(18).setFontWeight('bold');
+  
+  sheet.getRange('B5').setValue('Total Emails Shielded:').setFontWeight('bold');
+  sheet.getRange('B6').setValue(totalProcessed).setFontSize(24).setFontColor('#1155cc').setFontWeight('bold');
+  
+  sheet.getRange('B8').setValue('Last Engine Pulse:').setFontWeight('bold');
+  sheet.getRange('B9').setValue(lastSync).setFontStyle('italic');
+  
+  sheet.getRange('B11').setValue('System Status:').setFontWeight('bold');
+  sheet.getRange('B12').setValue('🛡️ PROTECTED').setFontWeight('bold').setFontColor('#38761d');
+
+  // Format
+  sheet.setColumnWidth(2, 300);
+  sheet.hideGridlines(true);
 }
 
 function getQuery(type, value) {
