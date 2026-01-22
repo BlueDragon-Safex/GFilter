@@ -1,56 +1,51 @@
 # GFilter™ Action Legend
 
-This document defines exactly what happens when you use specific actions in your GFilter Rules sheet or apply `__auto/` labels in Gmail.
+Learn how to build powerful automation rules for your Gmail.
 
 ---
 
-## 1. Core System Actions
-These are the standard, non-retention actions built into the system.
+## 🏗️ How to Build a Rule
+Every rule consists of a **Scope** (Who) and one or more **Actions** (What).
 
-| Action | Result in Gmail |
+1.  **Scope**: Choose exactly **one** from: `{Sender}`, `{Domain}`, `{List}`, or `{Subject}`.
+2.  **Actions**: Choose one or more from the categories below. 
+    > [!TIP]
+    > **Combine Actions**: You can combine multiple actions in one rule using the `+` sign (e.g., `Star+Keep7d`).
+
+---
+
+## 🛠️ Action Categories
+
+### 2a. Retention (Keep email for a period)
+Use these to set a "self-destruct" timer on emails.
+- **`Keep7d`**: Purge after 7 Days.
+- **`Keep30m`**: Purge after 30 Months.
+- **`Keep1y`**: Purge after 1 Year.
+
+### 2b. General Actions
+- **`Star`**: Adds a Star.
+- **`Important`**: Marks as Important.
+
+### 2c. Fast Cleanup
+- **`Delete`**: Direct to Trash.
+- **`Archive`**: Move out of Inbox.
+- **`Spam`**: Move to Spam folder.
+
+### 2d. Organization
+- **`Bulk` / `Newsletter` / `Work`**: Creates a custom label and archives.
+- **`CopyLabels`**: Modifier to sync existing labels from Gmail to GSheet.
+
+---
+
+## 🚀 Examples
+
+| Scope + Action | Result |
 | :--- | :--- |
-| **Archive** | Moves the email out of the Inbox. (Standard Gmail Archive). |
-| **Delete** | Moves the email directly to the **Trash**. |
-| **Spam** | Moves the email to the **Spam** folder. |
-| **Star** | Adds a **Star** to the thread. (Stays in Inbox). |
-| **Important** | Marks the thread as **Important**. (Stays in Inbox). |
-| **Inbox** | No action taken. The email remains exactly where it is. |
+| **`{Sender}`** + `Star+Keep1m` | Stars the email and Trashes it after 1 month. |
+| **`{Domain}`** + `Spam` | Sends everything from that domain to Spam. |
+| **`{Subject}`** + `Bulk+Keep3m` | Labels as "Bulk", Archives, and Trashes after 3 months. |
+| **`{Sender}`** + `Receipt+Expense+Keep3y+CopyLabels` | Labels as "Receipt", "Expense", Archives, and Trashes after 3 years. Copies any other existing labels. |
 
 ---
-
-## 2. Dynamic Retention Engine (`KeepNX`)
-Any action starting with **Keep** followed by a time period (e.g., `Keep7d`, `Keep30m`, `Keep1y`).
-
-| Action Prefix | Behavior | Cleanup (Daily at 2 AM) |
-| :--- | :--- | :--- |
-| **Keep[#]d** | Tags with `__auto/Keep[#]d` and Archives. | **Trashes** email after [#] Days. |
-| **Keep[#]m** | Tags with `__auto/Keep[#]m` and Archives. | **Trashes** email after [#] Months. |
-| **Keep[#]y** | Tags with `__auto/Keep[#]y` and Archives. | **Trashes** email after [#] Years. |
-
-> [!TIP]
-> **Example**: `Keep30d` will ensure the email is labeled and archived immediately, then automatically deleted exactly 30 days after it was received.
-
----
-
-## 3. Custom Action Labels
-If you enter any custom text not listed above (e.g., `Work`, `Taxes`, `Receipts`).
-
-- **Result**: GFilter automatically creates a label named `__auto/[YourText]`.
-- **Action**: The email is tagged with that label and **Archived** immediately.
-- **Purpose**: Use this for high-speed categorization of mail that you want to keep but don't want cluttering your Inbox.
-
----
-
-## 4. Special Modifiers
-These are advanced "utility" actions.
-
-- **`CopyLabels`**: 
-    - **When Tagging in Gmail**: If you tag an email with `__auto/CopyLabels` along with a scope (like `__auto/{Sender}`), GFilter will detect all *other* labels you've manually applied (e.g., "Personal") and copy them into your spreadsheet rules automatically.
-    - **In Spreadsheet**: If listed as an action, it simply ensures the email stays in the Inbox while other rules are processed.
-
----
-
-## ⚠️ Summary of Logic
-1. **Match** ➡️ 2. **Execute Action** (Delete/Star/etc) ➡️ 3. **Archive** (unless action is Star/Important/Inbox).
 
 *GFilter™ - Total Inbox Zero with Zero effort.*

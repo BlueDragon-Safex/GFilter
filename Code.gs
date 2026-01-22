@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.3.1
+ * @version 1.3.2
  * @date 2026-01-21
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -53,6 +53,7 @@
  * v1.2.9 (2026-01-21): Auto-Branding - Forced rename to "My GFilter™" during initial setup.
  * v1.3.0 (2026-01-21): Visual & Branding Refresh - Menu emojis, update badges, and GFilter Hub Sidebar.
  * v1.3.1 (2026-01-21): Retention Engine Refactor - Dynamic KeepNX tagging and robust historical processing.
+ * v1.3.2 (2026-01-21): Multi-Action Support - Support for combined actions (e.g., Star+Keep7d) via '+' separator.
  */
 
 const CONFIG = {
@@ -63,7 +64,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.3.1';
+const VERSION = 'v1.3.2';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -395,32 +396,42 @@ function applyRuleToHistory(sheet, rowNum, type, value, action, additionalLabels
 }
 
 /**
- * Logic for rule execution (including dynamic 'Keep' actions).
+ * Logic for rule execution (supports multi-actions like Star+Keep7d).
  */
 function executeAction(thread, action) {
-  switch (action) {
-    case 'Archive': thread.moveToArchive(); break;
-    case 'Delete': thread.moveToTrash(); break;
-    case 'Spam': thread.moveToSpam(); break;
-    case 'Star': thread.addStar(); break;
-    case 'Important': thread.markImportant(); break;
-    case 'Inbox': 
-    case 'CopyLabels': 
-      break; // Message stays in Inbox
-    default:
-      // Dynamic Action Branding (KeepNX or Other)
-      const labelName = `${CONFIG.LABEL_ROOT}/${action}`;
-      let l = GmailApp.getUserLabelByName(labelName);
-      if (!l) {
-        try {
-          l = GmailApp.createLabel(labelName);
-          logAction(`Dynamic Label created: ${labelName}`);
-        } catch (e) { console.warn(`Dynamic label creation failed: ${e.message}`); }
-      }
-      if (l) thread.addLabel(l);
-      thread.moveToArchive();
-      break;
-  }
+  if (!action) return;
+  
+  // Support '+' or ',' for multi-action combinations
+  const actions = action.toString().split(/[+,]/).map(s => s.trim());
+  let shouldArchive = false;
+
+  actions.forEach(act => {
+    switch (act) {
+      case 'Archive': thread.moveToArchive(); break;
+      case 'Delete': thread.moveToTrash(); break;
+      case 'Spam': thread.moveToSpam(); break;
+      case 'Star': thread.addStar(); break;
+      case 'Important': thread.markImportant(); break;
+      case 'Inbox': 
+      case 'CopyLabels': 
+        break; 
+      default:
+        // Dynamic Labeling (KeepNX, Work, etc)
+        const labelName = `${CONFIG.LABEL_ROOT}/${act}`;
+        let l = GmailApp.getUserLabelByName(labelName);
+        if (!l) {
+          try {
+            l = GmailApp.createLabel(labelName);
+            logAction(`Dynamic Label created: ${labelName}`);
+          } catch (e) { console.warn(`Dynamic label creation failed: ${e.message}`); }
+        }
+        if (l) thread.addLabel(l);
+        shouldArchive = true; // Most labels imply move out of Inbox
+        break;
+    }
+  });
+
+  if (shouldArchive) thread.moveToArchive();
 }
 
 function convertToDays(period) {
