@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.3.0
+ * @version 1.3.1
  * @date 2026-01-21
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -52,6 +52,7 @@
  * v1.2.8 (2026-01-21): Final UI Polish - Increased modal height for a scroll-free experience.
  * v1.2.9 (2026-01-21): Auto-Branding - Forced rename to "My GFilter™" during initial setup.
  * v1.3.0 (2026-01-21): Visual & Branding Refresh - Menu emojis, update badges, and GFilter Hub Sidebar.
+ * v1.3.1 (2026-01-21): Retention Engine Refactor - Dynamic KeepNX tagging and robust historical processing.
  */
 
 const CONFIG = {
@@ -62,7 +63,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.3.0';
+const VERSION = 'v1.3.1';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -76,9 +77,9 @@ function onOpen() {
     .addItem('🚀 Launch GFilter Hub', 'showHub')
     .addSeparator()
     .addItem('⚙️ Initialize / Refresh Labels', 'setupLabels')
-    .addItem('🔄 Sync Rules from Labels', 'processAutoLabels')
+    .addItem('🔄 Sync Rules Manually', 'processAutoLabels')
     .addSeparator()
-    .addItem('🧹 Run Cleanup (Retention)', 'cleanUpRetention')
+    .addItem('🧹 Run Historical Cleanup', 'cleanUpRetention')
     .addItem('⏰ Set Auto-Run Timer', 'setupTrigger')
     .addItem('🛑 Stop All Timers', 'stopTrigger')
     .addSeparator()
@@ -388,38 +389,38 @@ function applyRuleToHistory(sheet, rowNum, type, value, action, additionalLabels
 
   // Update Progress in Sheet
   const currentCount = parseInt(sheet.getRange(rowNum, 7).getValue() || 0);
+
   sheet.getRange(rowNum, 7).setValue(currentCount + threads.length);
   sheet.getRange(rowNum, 6).setValue('In Progress...');
 }
 
 /**
- * Maintenance task: deletes or archives mail based on KeepNx labels.
+ * Logic for rule execution (including dynamic 'Keep' actions).
  */
-function cleanUpRetention() {
-  const root = CONFIG.LABEL_ROOT;
-  const labels = GmailApp.getUserLabels();
-  
-  labels.forEach(label => {
-    const name = label.getName();
-    if (name.includes(`${root}/Keep`)) {
-      const period = name.split('Keep')[1];
-      const days = convertToDays(period);
-      if (days === null) return;
-
-      const threads = label.getThreads();
-      const now = new Date();
-      
-      threads.forEach(thread => {
-        const lastMsgDate = thread.getLastMessageDate();
-        const diff = (now - lastMsgDate) / (1000 * 60 * 60 * 24);
-        
-        if (diff > days) {
-          thread.moveToTrash(); // Or archive based on preference
-          logAction(`Retention: Deleted ${thread.getFirstMessageSubject()} (Over ${days} days)`);
-        }
-      });
-    }
-  });
+function executeAction(thread, action) {
+  switch (action) {
+    case 'Archive': thread.moveToArchive(); break;
+    case 'Delete': thread.moveToTrash(); break;
+    case 'Spam': thread.moveToSpam(); break;
+    case 'Star': thread.addStar(); break;
+    case 'Important': thread.markImportant(); break;
+    case 'Inbox': 
+    case 'CopyLabels': 
+      break; // Message stays in Inbox
+    default:
+      // Dynamic Action Branding (KeepNX or Other)
+      const labelName = `${CONFIG.LABEL_ROOT}/${action}`;
+      let l = GmailApp.getUserLabelByName(labelName);
+      if (!l) {
+        try {
+          l = GmailApp.createLabel(labelName);
+          logAction(`Dynamic Label created: ${labelName}`);
+        } catch (e) { console.warn(`Dynamic label creation failed: ${e.message}`); }
+      }
+      if (l) thread.addLabel(l);
+      thread.moveToArchive();
+      break;
+  }
 }
 
 function convertToDays(period) {
@@ -524,7 +525,6 @@ function applyRules() {
               } catch (e) { console.warn(`Label add failed: ${e.message}`); }
             });
           }
-          logAction(`Applied Rule ${action} to "${thread.getFirstMessageSubject()}"`);
         } catch (e) {
           console.error(`Rule failed: ${e.message}`);
         }
@@ -548,23 +548,36 @@ function getQuery(type, value) {
   }
 }
 
-function executeAction(thread, action) {
-  switch (action) {
-    case 'Archive': thread.moveToArchive(); break;
-    case 'Delete': thread.moveToTrash(); break;
-    case 'Spam': thread.moveToSpam(); break;
-    case 'Star': thread.addStar(); break;
-    case 'Important': thread.markImportant(); break;
-    case 'Inbox': 
-    case 'CopyLabels': 
-      break; // Do nothing, message stays in Inbox
-    // For Bulk/Newsletter/etc, we just add the label and archive
-    default:
-      const l = GmailApp.getUserLabelByName(`${CONFIG.LABEL_ROOT}/${action}`);
-      if (l) thread.addLabel(l);
-      thread.moveToArchive();
-      break;
-  }
+/**
+ * Centralized Retention Cleanup Routine.
+ * Deletes or archives mail based on KeepNX labels.
+ */
+function cleanUpRetention() {
+  const root = CONFIG.LABEL_ROOT;
+  const labels = GmailApp.getUserLabels();
+  const now = new Date();
+  
+  labels.forEach(label => {
+    const name = label.getName();
+    // Match __auto/KeepNX (where X is d, m, or y)
+    if (name.startsWith(`${root}/Keep`)) {
+      const period = name.split('/Keep')[1];
+      const days = convertToDays(period);
+      if (days === null) return;
+ 
+      // Process batches of 100 to avoid timeouts
+      const threads = label.getThreads(0, 100);
+      threads.forEach(thread => {
+        const lastMsgDate = thread.getLastMessageDate();
+        const diff = (now - lastMsgDate) / (1000 * 60 * 60 * 24);
+        
+        if (diff > days) {
+          thread.moveToTrash(); 
+          logAction(`Retention: Purged "${thread.getFirstMessageSubject()}" (Rule: ${period})`);
+        }
+      });
+    }
+  });
 }
 
 /**
