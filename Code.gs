@@ -71,7 +71,7 @@ function onOpen() {
 
 function checkUpdates() {
   const ui = SpreadsheetApp.getUi();
-  const rawUrl = 'https://raw.githubusercontent.com/BlueDragon-Safex/GFilter/main/Code.gs';
+  const rawUrl = 'https://raw.githubusercontent.com/BlueDragon-Safex/GFilter/master/Code.gs';
   
   try {
     const response = UrlFetchApp.fetch(rawUrl);
