@@ -1,4 +1,4 @@
-# GFilter™ (v1.3.0) - Setup Guide
+# GFilter™ (v1.3.1) - Setup Guide
 
 > [!IMPORTANT]
 > **MANDATORY NOTICE**: This copyright and all attribution headers must remain intact to use this code. 
@@ -61,7 +61,22 @@ GFilter stores all its intelligence in two tabs at the bottom of your spreadshee
 > These tabs are created automatically the first time you click **Initialize** or **Sync**. 
 
 ---
-
+ 
+ ## 🛡️ The Dynamic Retention Engine (v1.3.1)
+ v1.3.1 pivots the engine toward a **Retention-First** model. You no longer need to manually create action labels.
+ 
+ ### How it Works:
+ 1.  **Any Action is Now a Label**: If you enter `Keep7d` or `PrivateProject` in the **Action** column of your rules, GFilter will automatically create that label in Gmail if it doesn't exist.
+ 2.  **Retention Sync**: When you run a sync, GFilter sweeps your inbox and archives emails with your custom label.
+ 3.  **Automatic Cleanup**: The daily retention routine finds any `__auto/KeepNX` labels (where `NX` is `7d`, `30m`, `1y`, etc.) and purges emails older than that period.
+ 
+ ### Why this Rules:
+ - **Zero Warning UX**: You won't see "Missing Action label" warnings anymore. The system just builds what it needs.
+ - **Historical Tagging**: Every time you add a retention rule, GFilter sweeps your history to tag every matching email, ensuring nothing escapes the policy.
+ 
+ ---
+ 
+ ## ✅ Final Verification Checklist
 ## 🕰 Feature: Background Backlog Sync (New!)
 Got 20,000 emails to clean? GFilter™ (v1.0.6) is designed for "Mass Cleanup" without hitting Google's limits.
 
