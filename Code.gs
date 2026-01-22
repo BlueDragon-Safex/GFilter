@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.5.1
+ * @version 1.5.2
  * @date 2026-01-21
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -61,6 +61,7 @@
  * v1.4.2 (2026-01-21): Unified Actions - Merged Action columns into a single Chip-based column.
  * v1.5.0 (2026-01-21): Categorical Engine - 4-way Pick One structure (Keep/Action/Label/Source).
  * v1.5.1 (2026-01-21): Perfect Alignment - 9-column structure matching user template.
+ * v1.5.2 (2026-01-21): Deep Sync - Scans up to 300 threads for robust rule ingestion.
  */
 
 const CONFIG = {
@@ -71,7 +72,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.5.1';
+const VERSION = 'v1.5.2';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -234,38 +235,31 @@ function ensureLabel(name) {
 
 /**
  * Scans emails labeled with any __auto/ sub-label to create new rules.
- * No longer requires the parent "__auto" label to be manually applied.
+ * Performas a 'Deep Scan' of up to 300 threads across the last 7 days.
  */
 function processAutoLabels() {
   const root = CONFIG.LABEL_ROOT;
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // Find all threads that have ANY label starting with "__auto/"
-  // We search for the root and also check sub-labels to be thorough
-  const allLabels = GmailApp.getUserLabels();
-  const autoSubLabels = allLabels.filter(l => l.getName().startsWith(root + '/'));
-  
-  const threadMap = new Map();
-  
-  // Collect all threads from all __auto/ sub-labels
-  autoSubLabels.forEach(label => {
-    const name = label.getName();
-    // Use a broader search query and remove quotes to be more resilient
-    const labelThreads = GmailApp.search(`label:${name}`, 0, 50); 
-    labelThreads.forEach(t => threadMap.set(t.getId(), t));
-  });
-  
-  // Also check for the root label just in case
-  const rootLabel = GmailApp.getUserLabelByName(root);
-  if (rootLabel) {
-    const rootThreads = GmailApp.search(`label:"${root}" newer_than:7d`, 0, 20);
-    rootThreads.forEach(t => threadMap.set(t.getId(), t));
+  // High-Performance Unified Search
+  const query = `label:${root} newer_than:7d`;
+  const threads = GmailApp.search(query, 0, 300); 
+
+  if (threads.length === 0) {
+    // Fallback: Check if sub-labels exist but root isn't applied correctly
+    const allLabels = GmailApp.getUserLabels();
+    const subLabels = allLabels.filter(l => l.getName().startsWith(root + '/'));
+    if (subLabels.length > 0) {
+      subLabels.slice(0, 10).forEach(l => {
+        const batch = GmailApp.search(`label:${l.getName()}`, 0, 30);
+        batch.forEach(t => threads.push(t));
+      });
+    }
   }
 
-  const threads = Array.from(threadMap.values());
   if (threads.length === 0) return;
 
-  const headers = ['Rule Type', 'Match Value', 'Action', 'Additional Labels', 'Date Created', 'Sync Status', 'Backlog Count'];
+  const headers = ['Rule Type', 'Match Value', 'Keep', 'Action', 'Labels', 'Additional Labels', 'Date Created', 'Sync History', 'Processed Count'];
   const ruleSheet = getOrCreateSheet(ss, CONFIG.SHEET_RULES, headers);
   
   threads.forEach(thread => {
