@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.1.1
+ * @version 1.1.2
  * @date 2026-01-21
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -40,6 +40,7 @@
  * v1.1.0 (2026-01-21): Implicit Labeling - Removed requirement for manual __auto parent tag.
  * v1.1.1 (2026-01-21): Optimized Logging - Most recent logs now appear at the top with a 1000-row limit.
  * v1.1.2 (2026-01-21): Functional Update Checker - Now pulls the latest version from GitHub.
+ * v1.1.3 (2026-01-21): Efficiency Boost - processAutoLabels now only scans the last 7 days of tagged mail.
  */
 
 const CONFIG = {
@@ -50,7 +51,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.1.2';
+const VERSION = 'v1.1.3';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -161,16 +162,18 @@ function processAutoLabels() {
   
   const threadMap = new Map();
   
-  // Collect all threads from all __auto/ sub-labels
+  // Collect all threads from all __auto/ sub-labels (Recent only)
   autoSubLabels.forEach(label => {
-    const labelThreads = label.getThreads(0, 50); // Process up to 50 per label
+    // Only grab threads from the last 7 days to keep the sync lightning fast
+    const labelThreads = GmailApp.search(`label:"${label.getName()}" newer_than:7d`, 0, 20); 
     labelThreads.forEach(t => threadMap.set(t.getId(), t));
   });
   
-  // Also check for the root label just in case some users still use it
+  // Also check for the root label just in case
   const rootLabel = GmailApp.getUserLabelByName(root);
   if (rootLabel) {
-    rootLabel.getThreads(0, 50).forEach(t => threadMap.set(t.getId(), t));
+    const rootThreads = GmailApp.search(`label:"${root}" newer_than:7d`, 0, 20);
+    rootThreads.forEach(t => threadMap.set(t.getId(), t));
   }
 
   const threads = Array.from(threadMap.values());

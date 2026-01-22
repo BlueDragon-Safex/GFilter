@@ -28,4 +28,5 @@
     - [x] Add User Instructions to GSheet
     - [x] Create a "One-Click" setup guide
     - [x] Sync to GitHub (https://github.com/BlueDragon-Safex/GFilter)
+    - [x] Create a fun and informative README.md for GitHub
     - [x] Final Verification
