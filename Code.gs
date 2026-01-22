@@ -57,6 +57,7 @@
  * v1.3.3 (2026-01-21): Smart Table Update - New 'Auto Labels' column with onEdit multi-select logic.
  * v1.3.4 (2026-01-21): Native Chip UI - Automated high-end styled dropdowns and multi-select support.
  * v1.4.0 (2026-01-21): Command Center - Autonomous backlog engine & Stats Dashboard.
+ * v1.4.1 (2026-01-21): Sync Fix - Improved label search resilience for rule ingestion.
  */
 
 const CONFIG = {
@@ -67,7 +68,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.4.0';
+const VERSION = 'v1.4.1';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -255,10 +256,11 @@ function processAutoLabels() {
   
   const threadMap = new Map();
   
-  // Collect all threads from all __auto/ sub-labels (Recent only)
+  // Collect all threads from all __auto/ sub-labels
   autoSubLabels.forEach(label => {
-    // Only grab threads from the last 7 days to keep the sync lightning fast
-    const labelThreads = GmailApp.search(`label:"${label.getName()}" newer_than:7d`, 0, 20); 
+    const name = label.getName();
+    // Use a broader search query and remove quotes to be more resilient
+    const labelThreads = GmailApp.search(`label:${name}`, 0, 50); 
     labelThreads.forEach(t => threadMap.set(t.getId(), t));
   });
   
