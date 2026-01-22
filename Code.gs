@@ -41,6 +41,7 @@
  * v1.1.1 (2026-01-21): Optimized Logging - Most recent logs now appear at the top with a 1000-row limit.
  * v1.1.2 (2026-01-21): Functional Update Checker - Now pulls the latest version from GitHub.
  * v1.1.3 (2026-01-21): Efficiency Boost - processAutoLabels now only scans the last 7 days of tagged mail.
+ * v1.1.4 (2026-01-21): Integrated Update Delivery - Added a "Copy-Ready" update modal for effortless upgrades.
  */
 
 const CONFIG = {
@@ -51,7 +52,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.1.3';
+const VERSION = 'v1.1.4';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -91,18 +92,72 @@ function checkUpdates() {
     } else {
       const response = ui.alert(
         'Update Available', 
-        `A newer version (${remoteVersion}) is available on GitHub!\n\nYour Version: ${VERSION}\nLatest Version: ${remoteVersion}\n\nWould you like to visit the repository to get the new code?`, 
+        `A newer version (${remoteVersion}) is available on GitHub!\n\nYour Version: ${VERSION}\nLatest Version: ${remoteVersion}\n\nWould you like to get the latest code now?`, 
         ui.ButtonSet.YES_NO
       );
       if (response === ui.Button.YES) {
-        const link = 'https://github.com/BlueDragon-Safex/GFilter';
-        const html = `<script>window.open("${link}", "_blank");google.script.host.close();</script>Redirecting...`;
-        ui.showModalDialog(HtmlService.createHtmlOutput(html).setWidth(200).setHeight(50), 'Opening GitHub...');
+        showUpdateModal(remoteVersion, content);
       }
     }
   } catch (e) {
     ui.alert('Update Check', `Failed to check for updates: ${e.message}`, ui.ButtonSet.OK);
   }
+}
+
+/**
+ * Displays a modal with the new code and update instructions.
+ */
+function showUpdateModal(version, code) {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <link rel="stylesheet" href="https://ssl.gstatic.com/docs/script/css/add-ons1.css">
+        <style>
+          body { font-family: sans-serif; padding: 10px; line-height: 1.4; color: #333; }
+          .step { margin-bottom: 8px; font-weight: bold; }
+          textarea { width: 100%; height: 250px; font-family: monospace; font-size: 11px; margin: 10px 0; border: 1px solid #ccc; padding: 5px; background: #f9f9f9; }
+          .footer { font-size: 12px; color: #666; font-style: italic; }
+          button { background: #4285f4; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
+          button:hover { background: #357ae8; }
+        </style>
+      </head>
+      <body>
+        <div class="step">✨ Version ${version} is ready! Follow these steps to upgrade:</div>
+        <ol>
+          <li>Click inside the box below and press <b>Ctrl+A</b> (Select All), then <b>Ctrl+C</b> (Copy).</li>
+          <li>Go to <b>Extensions > Apps Script</b>.</li>
+          <li>In <b>Code.gs</b>, delete everything and <b>Ctrl+V</b> (Paste).</li>
+          <li>Save (Ctrl+S) and refresh the Google Sheet.</li>
+        </ol>
+        
+        <textarea id="codeBlock" readonly>${code}</textarea>
+        
+        <div style="text-align: right; margin-bottom: 10px;">
+          <button onclick="copyToClipboard()">Copy to Clipboard</button>
+        </div>
+        
+        <div class="footer">Source: https://github.com/BlueDragon-Safex/GFilter</div>
+
+        <script>
+          function copyToClipboard() {
+            var copyText = document.getElementById("codeBlock");
+            copyText.select();
+            copyText.setSelectionRange(0, 99999);
+            document.execCommand("copy");
+            alert("Code copied! Now paste it into your Apps Script editor.");
+          }
+        </script>
+      </body>
+    </html>
+  `;
+  
+  const output = HtmlService.createHtmlOutput(html)
+    .setWidth(600)
+    .setHeight(500)
+    .setTitle(`GFilter Update Delivery: ${version}`);
+    
+  SpreadsheetApp.getUi().showModalDialog(output, 'Update Instructions');
 }
 
 /**
