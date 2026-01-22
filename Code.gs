@@ -221,31 +221,7 @@ function showUpdateModal(version, code) {
   SpreadsheetApp.getUi().showModalDialog(output, 'Update Instructions');
 }
 
-/**
- * Creates the initial label hierarchy.
- */
-function setupLabels() {
-  const root = CONFIG.LABEL_ROOT;
-  ensureLabel(root);
-  
-  // Create Scopes
-  CONFIG.SCOPES.forEach(s => ensureLabel(`${root}/${s}`));
-  
-  // Create Actions
-  CONFIG.ACTIONS.forEach(a => ensureLabel(`${root}/${a}`));
-  
-  // Create default retention labels
-  ['1d', '7d', '1m', '3m', '6m', '1y', '3y', '7y'].forEach(period => {
-    ensureLabel(`${root}/Keep${period}`);
-  });
-  
-  // Ensure GSheet Tabs and Headers exist immediately
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  getOrCreateSheet(ss, CONFIG.SHEET_RULES, ['Rule Type', 'Match Value', 'Action', 'Additional Labels', 'Date Created', 'Sync History', 'Processed Count']);
-  getOrCreateSheet(ss, CONFIG.SHEET_LOGS, ['Timestamp', 'Message']);
-  
-  ss.toast('Labels and Sheets initialized!', 'GFilter');
-}
+
 
 function ensureLabel(name) {
   try {
@@ -512,21 +488,22 @@ function setupLabels() {
   // Apply DATA VALIDATION (CHIPS) - Ensures chips exist if the sheet is wiped
   applyChipValidation(ruleSheet);
 
-  const labelsToCreate = CONFIG.ACTIONS.map(a => `${CONFIG.LABEL_ROOT}/${a}`);
+  // Create Gmail Labels (Scopes, Actions, Retention)
+  const root = CONFIG.LABEL_ROOT;
+  const labelsToCreate = [
+    root,
+    ...CONFIG.SCOPES.map(s => `${root}/${s}`),
+    ...CONFIG.ACTIONS.map(a => `${root}/${a}`),
+    ...['1d', '7d', '1m', '3m', '6m', '1y', '3y', '7y'].map(p => `${root}/Keep${p}`)
+  ];
+
   labelsToCreate.forEach(labelName => {
     try {
-      GmailApp.createLabel(labelName);
-    } catch (e) {
-      // Label might already exist, ignore error
-    }
+      if (!GmailApp.getUserLabelByName(labelName)) {
+        GmailApp.createLabel(labelName);
+      }
+    } catch (e) {}
   });
-  
-  // Create root label if it doesn't exist
-  try {
-    GmailApp.createLabel(CONFIG.LABEL_ROOT);
-  } catch (e) {
-    // Root label might already exist, ignore error
-  }
 
   ui.alert('GFilter Setup', 'Rules Engine has been initialized with Premium Chip UI. You can now use the styled dropdowns to build your rules!', ui.ButtonSet.OK);
 }
@@ -578,7 +555,7 @@ function applyRules() {
       const threads = GmailApp.search(`${query} label:inbox`);
       threads.forEach(thread => {
         try {
-          executeAction(thread, action);
+          executeAction(thread, combinedAction);
           if (additionalLabels) {
             additionalLabels.split(',').forEach(labelName => {
               try {
