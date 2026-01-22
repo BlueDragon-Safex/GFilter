@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.1.8
+ * @version 1.1.9
  * @date 2026-01-21
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -46,6 +46,7 @@
  * v1.1.6 (2026-01-21): Fixed Modal Glitch - Resolved nested backtick issues in the update modal.
  * v1.1.7 (2026-01-21): Final Modal Verification Release.
  * v1.1.8 (2026-01-21): Resilience Update - Added cache-busting & headers to resolve intermittent 404/DNS issues.
+ * v1.1.9 (2026-01-21): Final Release Candidate - Verifying the resilient update delivery system.
  */
 
 const CONFIG = {
@@ -56,7 +57,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.1.8';
+const VERSION = 'v1.1.9';
 
 /**
  * Adds a custom menu to the Google Sheet.
