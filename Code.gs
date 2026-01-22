@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.2.9
+ * @version 1.3.0
  * @date 2026-01-21
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -51,6 +51,7 @@
  * v1.2.7 (2026-01-21): Premium Radio UI - Switched to radio buttons with enhanced spacing and padding.
  * v1.2.8 (2026-01-21): Final UI Polish - Increased modal height for a scroll-free experience.
  * v1.2.9 (2026-01-21): Auto-Branding - Forced rename to "My GFilter™" during initial setup.
+ * v1.3.0 (2026-01-21): Visual & Branding Refresh - Menu emojis, update badges, and GFilter Hub Sidebar.
  */
 
 const CONFIG = {
@@ -61,23 +62,55 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.2.9';
+const VERSION = 'v1.3.0';
 
 /**
  * Adds a custom menu to the Google Sheet.
  */
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
-  ui.createMenu(`GFilter (${VERSION})`)
-    .addItem('(re)Initialize GFilter', 'setupLabels')
-    .addItem('Sync Rules Manually', 'processAutoLabels')
+  const props = PropertiesService.getScriptProperties();
+  const updateBadge = props.getProperty('UPDATE_AVAILABLE') === 'true' ? ' 🔔' : '';
+
+  ui.createMenu(`GFilter (${VERSION})${updateBadge}`)
+    .addItem('🚀 Launch GFilter Hub', 'showHub')
     .addSeparator()
-    .addItem('Run Historial Cleanup Manually', 'cleanUpRetention')
-    .addItem('Set Auto-Run Timer', 'setupTrigger')
-    .addItem('Stop All Timers', 'stopTrigger')
+    .addItem('⚙️ Initialize / Refresh Labels', 'setupLabels')
+    .addItem('🔄 Sync Rules from Labels', 'processAutoLabels')
     .addSeparator()
-    .addItem('Check for Updates...', 'checkUpdates')
+    .addItem('🧹 Run Cleanup (Retention)', 'cleanUpRetention')
+    .addItem('⏰ Set Auto-Run Timer', 'setupTrigger')
+    .addItem('🛑 Stop All Timers', 'stopTrigger')
+    .addSeparator()
+    .addItem(`✨ Check for Updates...${updateBadge}`, 'checkUpdates')
     .addToUi();
+}
+
+/**
+ * Silent version check for the background engine.
+ */
+function checkUpdatesSilent() {
+  const rawUrl = 'https://raw.githubusercontent.com/BlueDragon-Safex/GFilter/master/Code.gs?t=' + new Date().getTime();
+  try {
+    const response = UrlFetchApp.fetch(rawUrl, { 'muteHttpExceptions': true, 'headers': { 'User-Agent': 'GFilter-Update-Checker' }});
+    const remoteVersionMatch = response.getContentText().match(/const VERSION = '([^']+)'/);
+    if (remoteVersionMatch && remoteVersionMatch[1] !== VERSION) {
+      PropertiesService.getScriptProperties().setProperty('UPDATE_AVAILABLE', 'true');
+    } else {
+      PropertiesService.getScriptProperties().setProperty('UPDATE_AVAILABLE', 'false');
+    }
+  } catch (e) {}
+}
+
+/**
+ * Displays the branded GFilter Hub Sidebar.
+ */
+function showHub() {
+  const html = HtmlService.createTemplateFromFile('Hub')
+      .evaluate()
+      .setTitle('GFilter™ Hub')
+      .setSandboxMode(HtmlService.SandboxMode.IFRAME);
+  SpreadsheetApp.getUi().showSidebar(html);
 }
 
 function checkUpdates() {
@@ -103,8 +136,10 @@ function checkUpdates() {
     const remoteVersion = remoteVersionMatch[1];
     
     if (remoteVersion === VERSION) {
+      PropertiesService.getScriptProperties().setProperty('UPDATE_AVAILABLE', 'false');
       ui.alert('Update Check', `Current Version: ${VERSION}\n\nYou are running the latest version of GFilter.`, ui.ButtonSet.OK);
     } else {
+      PropertiesService.getScriptProperties().setProperty('UPDATE_AVAILABLE', 'true');
       const response = ui.alert(
         'Update Available', 
         `A newer version (${remoteVersion}) is available on GitHub!\n\nYour Version: ${VERSION}\nLatest Version: ${remoteVersion}\n\nWould you like to get the latest code now?`, 
@@ -421,7 +456,9 @@ function logAction(msg) {
   logSheet.insertRowAfter(1);
   logSheet.getRange(2, 1, 1, 2).setValues([[new Date(), msg]]);
   
-  // Keep only the last 1000 rows (Header + 999 Logs)
+  // Silent update check in background
+  checkUpdatesSilent();
+  
   if (logSheet.getLastRow() > 1000) {
     logSheet.deleteRow(1001);
   }
