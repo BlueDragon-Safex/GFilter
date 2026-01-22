@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.2.6
+ * @version 1.2.7
  * @date 2026-01-21
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -48,6 +48,7 @@
  * v1.2.4 (2026-01-21): Final Sign-off - Verifying the official template-based update delivery.
  * v1.2.5 (2026-01-21): Trigger Fix & Master Link - Resolved 60min trigger bug and added official GSheet copy link.
  * v1.2.6 (2026-01-21): Automation Picklist - Upgraded trigger setup to a professional HTML choice dialog.
+ * v1.2.7 (2026-01-21): Premium Radio UI - Switched to radio buttons with enhanced spacing and padding.
  */
 
 const CONFIG = {
@@ -58,7 +59,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.2.6';
+const VERSION = 'v1.2.7';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -66,12 +67,12 @@ const VERSION = 'v1.2.6';
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu(`GFilter (${VERSION})`)
-    .addItem('Initialize / Refresh Labels', 'setupLabels')
-    .addItem('Sync Rules from Labels', 'processAutoLabels')
+    .addItem('(re)Initialize GFilter', 'setupLabels')
+    .addItem('Sync Rules Manually', 'processAutoLabels')
     .addSeparator()
-    .addItem('Run Cleanup (Retention)', 'cleanUpRetention')
-    .addItem('Set Automation Triggers', 'setupTrigger')
-    .addItem('Stop All Automation', 'stopTrigger')
+    .addItem('Run Historial Cleanup Manually', 'cleanUpRetention')
+    .addItem('Set Auto-Run Timer', 'setupTrigger')
+    .addItem('Stop All Timers', 'stopTrigger')
     .addSeparator()
     .addItem('Check for Updates...', 'checkUpdates')
     .addToUi();
@@ -505,31 +506,38 @@ function setupTrigger() {
   const html = '<!DOCTYPE html><html><head>' +
                '<link rel="stylesheet" href="https://ssl.gstatic.com/docs/script/css/add-ons1.css">' +
                '<style>' +
-               'body { font-family: sans-serif; padding: 15px; line-height: 1.5; color: #333; }' +
-               '.title { font-weight: bold; font-size: 16px; margin-bottom: 15px; color: #4285f4; }' +
-               'select { width: 100%; padding: 10px; border-radius: 4px; border: 1px solid #ccc; margin-bottom: 20px; font-size: 14px; }' +
-               'button { background: #4285f4; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }' +
-               'button:hover { background: #357ae8; }' +
+               'body { font-family: "Google Sans", Roboto, Arial, sans-serif; padding: 30px; line-height: 1.6; color: #3c4043; background-color: #ffffff; }' +
+               '.title { font-weight: 500; font-size: 20px; margin-bottom: 12px; color: #1a73e8; display: flex; align-items: center; gap: 10px; }' +
+               '.subtitle { margin-bottom: 24px; font-size: 14px; color: #5f6368; }' +
+               '.radio-group { margin-bottom: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }' +
+               '.radio-item { display: flex; align-items: center; padding: 12px 16px; border: 1px solid #dadce0; border-radius: 8px; cursor: pointer; transition: all 0.2s; }' +
+               '.radio-item:hover { background-color: #f8f9fa; border-color: #1a73e8; }' +
+               '.radio-item input { margin-right: 12px; cursor: pointer; accent-color: #1a73e8; scale: 1.2; }' +
+               '.radio-item label { cursor: pointer; font-size: 14px; flex-grow: 1; user-select: none; }' +
+               'button { background: #1a73e8; color: white; border: none; padding: 14px 24px; border-radius: 8px; cursor: pointer; font-weight: 500; width: 100%; font-size: 15px; box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3); transition: background 0.2s; }' +
+               'button:hover { background: #1765cc; box-shadow: 0 1px 3px 1px rgba(60,64,67,0.15); }' +
                '</style></head><body>' +
-               '<div class="title">🏃 Setup GFilter Automation</div>' +
-               '<p style="font-size: 13px;">Choose how often GFilter should scan your inbox and sync your rules:</p>' +
-               '<select id="freq">' +
-               '  <option value="10m">Every 10 Minutes</option>' +
-               '  <option value="30m">Every 30 Minutes</option>' +
-               '  <option value="1h">Every 1 Hour (Recommended)</option>' +
-               '  <option value="4h">Every 4 Hours</option>' +
-               '  <option value="12h">Every 12 Hours</option>' +
-               '  <option value="24h">Every 24 Hours</option>' +
-               '</select>' +
+               '<div class="title">🏃 Setup Automation</div>' +
+               '<div class="subtitle">Select scan frequency for rules and sync:</div>' +
+               '<div class="radio-group">' +
+               '  <div class="radio-item"><input type="radio" name="freq" value="10m" id="f10"><label for="f10">10 Minutes</label></div>' +
+               '  <div class="radio-item"><input type="radio" name="freq" value="30m" id="f30"><label for="f30">30 Minutes</label></div>' +
+               '  <div class="radio-item"><input type="radio" name="freq" value="1h" id="f1h" checked><label for="f1h">1 Hour</label></div>' +
+               '  <div class="radio-item"><input type="radio" name="freq" value="4h" id="f4h"><label for="f4h">4 Hours</label></div>' +
+               '  <div class="radio-item"><input type="radio" name="freq" value="12h" id="f12h"><label for="f12h">12 Hours</label></div>' +
+               '  <div class="radio-item"><input type="radio" name="freq" value="24h" id="f24h"><label for="f24h">24 Hours</label></div>' +
+               '</div>' +
                '<button onclick="submit()">Activate Automation</button>' +
                '<script>' +
                '  function submit() {' +
-               '    var val = document.getElementById("freq").value;' +
+               '    var radios = document.getElementsByName("freq");' +
+               '    var val = "1h";' +
+               '    for (var i = 0; i < radios.length; i++) { if (radios[i].checked) val = radios[i].value; }' +
                '    google.script.run.withSuccessHandler(function() { google.script.host.close(); }).createAutomationTriggers(val);' +
                '  }' +
                '</script></body></html>';
   
-  const output = HtmlService.createHtmlOutput(html).setWidth(350).setHeight(250);
+  const output = HtmlService.createHtmlOutput(html).setWidth(480).setHeight(380);
   SpreadsheetApp.getUi().showModalDialog(output, 'Automation Settings');
 }
 
