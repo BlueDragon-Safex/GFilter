@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.1.2
+ * @version 1.1.5
  * @date 2026-01-21
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -42,6 +42,7 @@
  * v1.1.2 (2026-01-21): Functional Update Checker - Now pulls the latest version from GitHub.
  * v1.1.3 (2026-01-21): Efficiency Boost - processAutoLabels now only scans the last 7 days of tagged mail.
  * v1.1.4 (2026-01-21): Integrated Update Delivery - Added a "Copy-Ready" update modal for effortless upgrades.
+ * v1.1.5 (2026-01-21): Production Release - Final version for current testing cycle.
  */
 
 const CONFIG = {
@@ -52,7 +53,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.1.4';
+const VERSION = 'v1.1.5';
 
 /**
  * Adds a custom menu to the Google Sheet.
