@@ -5,7 +5,7 @@
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
  * @author 123 PROPERTY INVESTMENT GROUP, INC.
- * @contact Hello@RapidCashHomeBuyers.org
+ * @contact BlueDragon.Safex@Gmail.com
  * @source https://github.com/BlueDragon-Safex/GFilter.git
  * 
  * MANDATORY NOTICE: This copyright and all attribution headers must remain 
