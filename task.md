@@ -22,7 +22,10 @@
     - [x] Implement 'Stop All Automation' kill switch
     - [x] Implement 'Background Backlog Engine' for mass history (20k+ emails)
     - [x] Rename {CopyLabels} to CopyLabels (v1.0.8) for better convention
+    - [x] Implement 'Implicit Labeling' (v1.1.0) - No manual __auto tag required
+    - [x] Implement 'Pruned Top-Loading Logs' (v1.1.1) - Keep only last 999 entries at the top
 - [x] **Polishing and Documentation**
     - [x] Add User Instructions to GSheet
     - [x] Create a "One-Click" setup guide
+    - [x] Sync to GitHub (https://github.com/BlueDragon-Safex/GFilter)
     - [x] Final Verification

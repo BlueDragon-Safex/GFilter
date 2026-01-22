@@ -1,4 +1,4 @@
-# GFilter™ (v1.0.9) - Setup Guide
+# GFilter™ (v1.1.2) - Setup Guide
 
 > [!IMPORTANT]
 > **MANDATORY NOTICE**: This copyright and all attribution headers must remain intact to use this code. 
@@ -26,8 +26,7 @@ To get GFilter running in your own Google account:
 
 ### 1. Creating a New Rule (Mobile or Desktop)
 1.  Open an email you want to filter.
-2.  Add the parent label `__auto`.
-3.  Add **ONE Scope label**:
+2.  Add **ONE Scope label**:
     *   `__auto/{Sender}`, `__auto/{Domain}`, `__auto/{List}`, or `__auto/{Subject}`.
 5.  Add **ONE or MORE Action labels**:
     *   `__auto/Archive`, `__auto/Delete`, `__auto/Spam`, `__auto/Star`.
@@ -115,3 +114,5 @@ If you have questions or need assistance, please contact:
 > **Privacy First**: Because you copied this script into your own account, no one but you has access to your emails. Your data stays in your personal Google Drive.
 
 © 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved. GFilter™ is a trademark of 123 PROPERTY INVESTMENT GROUP, INC.
+
+**Official Repository**: [https://github.com/BlueDragon-Safex/GFilter](https://github.com/BlueDragon-Safex/GFilter)

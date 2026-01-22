@@ -1,12 +1,12 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.0.9
+ * @version 1.1.1
  * @date 2026-01-21
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
  * @author 123 PROPERTY INVESTMENT GROUP, INC.
  * @contact Hello@RapidCashHomeBuyers.org
- * @source [LINK_TO_CODE_SOURCE]
+ * @source https://github.com/BlueDragon-Safex/GFilter.git
  * 
  * MANDATORY NOTICE: This copyright and all attribution headers must remain 
  * intact to use this code. 
@@ -37,6 +37,9 @@
  * v1.0.7 (2026-01-21): Moved {CopyLabels} to ACTIONS for easier rule creation.
  * v1.0.8 (2026-01-21): Renamed {CopyLabels} to CopyLabels for naming convention.
  * v1.0.9 (2026-01-21): Hardened getOrCreateSheet to ensure headers are always present.
+ * v1.1.0 (2026-01-21): Implicit Labeling - Removed requirement for manual __auto parent tag.
+ * v1.1.1 (2026-01-21): Optimized Logging - Most recent logs now appear at the top with a 1000-row limit.
+ * v1.1.2 (2026-01-21): Functional Update Checker - Now pulls the latest version from GitHub.
  */
 
 const CONFIG = {
@@ -47,7 +50,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.0.9';
+const VERSION = 'v1.1.2';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -68,7 +71,37 @@ function onOpen() {
 
 function checkUpdates() {
   const ui = SpreadsheetApp.getUi();
-  ui.alert('Update Check', `Current Version: ${VERSION}\n\nYou are running the latest version of GFilter.`, ui.ButtonSet.OK);
+  const rawUrl = 'https://raw.githubusercontent.com/BlueDragon-Safex/GFilter/main/Code.gs';
+  
+  try {
+    const response = UrlFetchApp.fetch(rawUrl);
+    const content = response.getContentText();
+    const remoteVersionMatch = content.match(/const VERSION = '([^']+)'/);
+    
+    if (!remoteVersionMatch) {
+      ui.alert('Update Check', 'Could not determine the latest version from GitHub.', ui.ButtonSet.OK);
+      return;
+    }
+    
+    const remoteVersion = remoteVersionMatch[1];
+    
+    if (remoteVersion === VERSION) {
+      ui.alert('Update Check', `Current Version: ${VERSION}\n\nYou are running the latest version of GFilter.`, ui.ButtonSet.OK);
+    } else {
+      const response = ui.alert(
+        'Update Available', 
+        `A newer version (${remoteVersion}) is available on GitHub!\n\nYour Version: ${VERSION}\nLatest Version: ${remoteVersion}\n\nWould you like to visit the repository to get the new code?`, 
+        ui.ButtonSet.YES_NO
+      );
+      if (response === ui.Button.YES) {
+        const link = 'https://github.com/BlueDragon-Safex/GFilter';
+        const html = `<script>window.open("${link}", "_blank");google.script.host.close();</script>Redirecting...`;
+        ui.showModalDialog(HtmlService.createHtmlOutput(html).setWidth(200).setHeight(50), 'Opening GitHub...');
+      }
+    }
+  } catch (e) {
+    ui.alert('Update Check', `Failed to check for updates: ${e.message}`, ui.ButtonSet.OK);
+  }
 }
 
 /**
@@ -114,13 +147,35 @@ function ensureLabel(name) {
 }
 
 /**
- * Scans emails labeled with __auto to create new rules.
+ * Scans emails labeled with any __auto/ sub-label to create new rules.
+ * No longer requires the parent "__auto" label to be manually applied.
  */
 function processAutoLabels() {
-  const threads = GmailApp.search(`label:${CONFIG.LABEL_ROOT}`);
+  const root = CONFIG.LABEL_ROOT;
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // Find all threads that have ANY label starting with "__auto/"
+  // We search for the root and also check sub-labels to be thorough
+  const allLabels = GmailApp.getUserLabels();
+  const autoSubLabels = allLabels.filter(l => l.getName().startsWith(root + '/'));
+  
+  const threadMap = new Map();
+  
+  // Collect all threads from all __auto/ sub-labels
+  autoSubLabels.forEach(label => {
+    const labelThreads = label.getThreads(0, 50); // Process up to 50 per label
+    labelThreads.forEach(t => threadMap.set(t.getId(), t));
+  });
+  
+  // Also check for the root label just in case some users still use it
+  const rootLabel = GmailApp.getUserLabelByName(root);
+  if (rootLabel) {
+    rootLabel.getThreads(0, 50).forEach(t => threadMap.set(t.getId(), t));
+  }
+
+  const threads = Array.from(threadMap.values());
   if (threads.length === 0) return;
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
   const ruleSheet = getOrCreateSheet(ss, CONFIG.SHEET_RULES, ['Rule Type', 'Match Value', 'Action', 'Additional Labels', 'Date Created']);
   
   threads.forEach(thread => {
@@ -301,7 +356,15 @@ function getOrCreateSheet(ss, name, headers) {
 function logAction(msg) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const logSheet = getOrCreateSheet(ss, CONFIG.SHEET_LOGS, ['Timestamp', 'Message']);
-  logSheet.appendRow([new Date(), msg]);
+  
+  // Insert at the top (after header)
+  logSheet.insertRowAfter(1);
+  logSheet.getRange(2, 1, 1, 2).setValues([[new Date(), msg]]);
+  
+  // Keep only the last 1000 rows (Header + 999 Logs)
+  if (logSheet.getLastRow() > 1000) {
+    logSheet.deleteRow(1001);
+  }
 }
 
 /**
