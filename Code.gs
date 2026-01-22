@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.4.0
+ * @version 1.4.2
  * @date 2026-01-21
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -58,6 +58,7 @@
  * v1.3.4 (2026-01-21): Native Chip UI - Automated high-end styled dropdowns and multi-select support.
  * v1.4.0 (2026-01-21): Command Center - Autonomous backlog engine & Stats Dashboard.
  * v1.4.1 (2026-01-21): Sync Fix - Improved label search resilience for rule ingestion.
+ * v1.4.2 (2026-01-21): Unified Actions - Merged Action columns into a single Chip-based column.
  */
 
 const CONFIG = {
@@ -68,7 +69,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.4.1';
+const VERSION = 'v1.4.2';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -102,12 +103,11 @@ function onEdit(e) {
   const val = e.value;
   const oldVal = e.oldValue;
 
-  // Monitor 'Auto Labels' (Col 3) and 'Action' (Col 4) on 'Rules' sheet
-  if (sheet.getName() === CONFIG.SHEET_RULES && (range.getColumn() === 3 || range.getColumn() === 4)) {
+  // Monitor 'Action' (Col 3) on 'Rules' sheet
+  if (sheet.getName() === CONFIG.SHEET_RULES && range.getColumn() === 3) {
     if (val && oldVal && oldVal.indexOf(val) === -1) {
-      // Use comma if the cell already contains one (Chip UI), otherwise use '+'
-      const separator = oldVal.indexOf(',') > -1 ? ',' : '+'; 
-      range.setValue(oldVal + separator + val);
+      // Use comma space for native Chips
+      range.setValue(oldVal + ', ' + val);
     }
   }
 }
@@ -274,7 +274,7 @@ function processAutoLabels() {
   const threads = Array.from(threadMap.values());
   if (threads.length === 0) return;
 
-  const headers = ['Rule Type', 'Match Value', 'Auto Labels', 'Action', 'Additional Labels', 'Date Created', 'Sync Status', 'Backlog Count'];
+  const headers = ['Rule Type', 'Match Value', 'Action', 'Additional Labels', 'Date Created', 'Sync Status', 'Backlog Count'];
   const ruleSheet = getOrCreateSheet(ss, CONFIG.SHEET_RULES, headers);
   
   threads.forEach(thread => {
@@ -290,8 +290,8 @@ function processAutoLabels() {
     if (scopes.length === 0) return;
 
     const hasCopyLabels = ruleActions.some(a => a.includes('CopyLabels'));
-    const cleanActions = ruleActions.map(a => a.split('/')[1]);
-    const actionStr = cleanActions.join('+');
+    // Join with comma-space for Chip implementation
+    const actionStr = ruleActions.map(a => a.split('/')[1]).join(', ');
 
     const message = thread.getMessages()[0];
     
@@ -299,7 +299,6 @@ function processAutoLabels() {
       const scopeType = s.split('/')[1];
       const matchValue = getMatchValue(message, scopeType);
       
-      // Get any existing user labels (non-auto) if CopyLabels is present
       const labelsToCopy = hasCopyLabels ? labels.filter(l => !l.startsWith(CONFIG.LABEL_ROOT)) : [];
       addRule(ruleSheet, scopeType, matchValue, actionStr, labelsToCopy);
     });
@@ -340,8 +339,8 @@ function addRule(sheet, type, value, actionStr, allLabels) {
   
   if (!exists) {
     const additional = allLabels.filter(l => !l.startsWith(CONFIG.LABEL_ROOT)).join(', ');
-    // New Order: Type(1), Value(2), AutoLabels(3), Action(4), Additional(5), Date(6), Status(7), Count(8)
-    sheet.appendRow([type, value, actionStr, '', additional, new Date(), 'Pending', 0]);
+    // Order: Type(1), Value(2), Action(3), Additional(4), Date(5), Status(6), Count(7)
+    sheet.appendRow([type, value, actionStr, additional, new Date(), 'Pending', 0]);
     
     // Initial sync will be handled by the background engine
     logAction(`Rule Registered: ${value}. Backlog Engine will process history autonomously.`);
@@ -363,26 +362,25 @@ function runBacklogEngine() {
   let workDone = false;
 
   for (let i = 1; i < data.length; i++) {
-    const [type, value, autoLabels, action, addit, date, status, count] = data[i];
+    const [type, value, action, addit, date, status, count] = data[i];
     
     if (status === 'Pending' || status === 'In Progress...') {
-      const combinedAction = (autoLabels || '') + (action ? '+' + action : '');
       const batchSize = 100;
       const query = getQuery(type, value);
       if (!query) continue;
 
       const threads = GmailApp.search(query, 0, batchSize);
       if (threads.length === 0) {
-        sheet.getRange(i + 1, 7).setValue('Complete');
-        sheet.getRange(i + 1, 7).setBackground('#d9ead3'); // Light Green
+        sheet.getRange(i + 1, 6).setValue('Complete');
+        sheet.getRange(i + 1, 6).setBackground('#d9ead3'); // Light Green
         continue;
       }
 
-      threads.forEach(t => executeAction(t, combinedAction));
+      threads.forEach(t => executeAction(t, action));
       
       const newCount = (parseInt(count) || 0) + threads.length;
-      sheet.getRange(i + 1, 8).setValue(newCount);
-      sheet.getRange(i + 1, 7).setValue('In Progress...');
+      sheet.getRange(i + 1, 7).setValue(newCount);
+      sheet.getRange(i + 1, 6).setValue('In Progress...');
       
       // Update Stats
       incrementStat('TOTAL_PROCESSED', threads.length);
@@ -501,7 +499,7 @@ function setupLabels() {
   }
   
   // Header/Table formatting removed - now handled by the GFilter Template.
-  const headers = ['Rule Type', 'Match Value', 'Auto Labels', 'Action', 'Additional Labels', 'Date Created', 'Sync Status', 'Backlog Count'];
+  const headers = ['Rule Type', 'Match Value', 'Action', 'Additional Labels', 'Date Created', 'Sync Status', 'Backlog Count'];
   const ruleSheet = getOrCreateSheet(ss, CONFIG.SHEET_RULES, headers);
   
   // Apply DATA VALIDATION (CHIPS) - Ensures chips exist if the sheet is wiped
@@ -539,7 +537,7 @@ function applyChipValidation(sheet) {
     .build();
   sheet.getRange(2, 1, lastRow).setDataValidation(scopeRule);
 
-  // 2. Action/AutoLabel Chips (Col C & D)
+  // 2. Action Chips (Col C)
   const actionList = [
     'Archive', 'Delete', 'Spam', 'Star', 'Important', 'Inbox', 'CopyLabels',
     'Keep1d', 'Keep7d', 'Keep1m', 'Keep3m', 'Keep6m', 'Keep1y', 'Keep3y', 'Keep7y',
@@ -549,7 +547,7 @@ function applyChipValidation(sheet) {
     .setAllowInvalid(true) // Allow typing custom KeepNX
     .build();
   
-  sheet.getRange(2, 3, lastRow, 2).setDataValidation(actionRule);
+  sheet.getRange(2, 3, lastRow).setDataValidation(actionRule);
 }
 
 function applyRules() {
@@ -562,11 +560,9 @@ function applyRules() {
 
   // Process rules from row 2 onwards
   for (let i = 1; i < rules.length; i++) {
-    const [type, value, autoLabels, action, additionalLabels, dateCreated, syncStatus] = rules[i];
+    const [type, value, action, additionalLabels, dateCreated, syncStatus] = rules[i];
     
-    // Priority: Use Column C (Auto Labels) if Column D (Action) is blank
-    const combinedAction = (autoLabels || '') + (action ? '+' + action : '');
-    if (!value || !combinedAction) continue;
+    if (!value || !action) continue;
 
     // 1. Process New Incoming Mail (Inbox)
     const query = getQuery(type, value);
@@ -574,7 +570,7 @@ function applyRules() {
       const threads = GmailApp.search(`${query} label:inbox`);
       threads.forEach(thread => {
         try {
-          executeAction(thread, combinedAction);
+          executeAction(thread, action);
           if (additionalLabels) {
             additionalLabels.split(',').forEach(labelName => {
               try {
@@ -592,7 +588,6 @@ function applyRules() {
     // 2. Process Historical Backlog (Autonomous Engine handles this now)
     // No direct call here, background triggers will pick up 'Pending' rules.
   }
-  updateDashboard();
 }
 
 /**
