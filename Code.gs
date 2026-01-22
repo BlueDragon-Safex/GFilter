@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.4.2
+ * @version 1.5.0
  * @date 2026-01-21
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -59,6 +59,7 @@
  * v1.4.0 (2026-01-21): Command Center - Autonomous backlog engine & Stats Dashboard.
  * v1.4.1 (2026-01-21): Sync Fix - Improved label search resilience for rule ingestion.
  * v1.4.2 (2026-01-21): Unified Actions - Merged Action columns into a single Chip-based column.
+ * v1.5.0 (2026-01-21): Categorical Engine - 4-way Pick One structure (Keep/Action/Label/Source).
  */
 
 const CONFIG = {
@@ -69,7 +70,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.4.2';
+const VERSION = 'v1.5.0';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -93,23 +94,8 @@ function onOpen() {
     .addToUi();
 }
 
-/**
- * Multi-Select Logic: Appends selected values with a '+' instead of replacing.
- * Optimized to handle both native chips (comma) and manual edits (+).
- */
-function onEdit(e) {
-  const sheet = e.source.getActiveSheet();
-  const range = e.range;
-  const val = e.value;
-  const oldVal = e.oldValue;
-
-  // Monitor 'Action' (Col 3) on 'Rules' sheet
-  if (sheet.getName() === CONFIG.SHEET_RULES && range.getColumn() === 3) {
-    if (val && oldVal && oldVal.indexOf(val) === -1) {
-      // Use comma space for native Chips
-      range.setValue(oldVal + ', ' + val);
-    }
-  }
+  // No multi-select logic in v1.5.0. 
+  // Native single-pick chips are now managed by Google Sheets.
 }
 
 /**
@@ -283,43 +269,41 @@ function processAutoLabels() {
     
     if (autoLabels.length < 1) return; 
 
-    const scopes = autoLabels.filter(l => CONFIG.SCOPES.includes(l.split('/')[1]));
-    // Any __auto/ label that ISN'T a scope is an action/retention tag
-    const ruleActions = autoLabels.filter(l => !CONFIG.SCOPES.includes(l.split('/')[1]));
+    // Categorization Logic (Alphabetical Winner)
+    const scopes = autoLabels.filter(l => CONFIG.SCOPES.includes(l.split('/')[1])).sort();
+    const keepTags = autoLabels.filter(l => l.split('/')[1].startsWith('Keep')).sort();
+    const actionTags = autoLabels.filter(l => ['Archive', 'Delete', 'Spam', 'Star', 'CopyLabels'].includes(l.split('/')[1])).sort();
+    const otherTags = autoLabels.filter(l => !scopes.includes(l) && !keepTags.includes(l) && !actionTags.includes(l)).sort();
 
     if (scopes.length === 0) return;
 
-    const hasCopyLabels = ruleActions.some(a => a.includes('CopyLabels'));
-    // Join with comma-space for Chip implementation
-    const actionStr = ruleActions.map(a => a.split('/')[1]).join(', ');
+    // Pick Winners
+    const scopeType = scopes[0].split('/')[1];
+    const keepVal = keepTags.length > 0 ? keepTags[0].split('/')[1] : '';
+    const actionVal = actionTags.length > 0 ? actionTags[0].split('/')[1] : '';
+    const labelVal = otherTags.length > 0 ? otherTags[0].split('/')[1] : '';
 
     const message = thread.getMessages()[0];
+    const matchValue = getMatchValue(message, scopeType);
     
-    scopes.forEach(s => {
-      const scopeType = s.split('/')[1];
-      const matchValue = getMatchValue(message, scopeType);
-      
-      const labelsToCopy = hasCopyLabels ? labels.filter(l => !l.startsWith(CONFIG.LABEL_ROOT)) : [];
-      addRule(ruleSheet, scopeType, matchValue, actionStr, labelsToCopy);
-    });
+    // Add Categorical Rule
+    addCategoricalRule(ruleSheet, scopeType, matchValue, keepVal, actionVal, labelVal);
 
-    // Cleanup labels after processing
-    autoLabels.forEach(l => {
-      try {
-        const lbl = GmailApp.getUserLabelByName(l);
-        if (lbl) thread.removeLabel(lbl);
-      } catch (e) {
-        console.warn(`Could not remove label ${l}: ${e.message}`);
-      }
-    });
-
-    try {
-      const rootLbl = GmailApp.getUserLabelByName(CONFIG.LABEL_ROOT);
-      if (rootLbl) thread.removeLabel(rootLbl);
-    } catch (e) {
-      console.warn(`Could not remove root label: ${e.message}`);
-    }
+    // Cleanup labels
+    autoLabels.forEach(l => { try { thread.removeLabel(GmailApp.getUserLabelByName(l)); } catch (e) {} });
   });
+}
+
+function addCategoricalRule(sheet, type, value, keep, action, label) {
+  const data = sheet.getDataRange().getValues();
+  // Check existence across Source/Value/Keep/Action/Label
+  const exists = data.some(row => row[0] === type && row[1] === value && row[2] === keep && row[3] === action && row[4] === label);
+  
+  if (!exists) {
+    // [Source, Value, Keep, Action, Label, Date, Status, Count]
+    sheet.appendRow([type, value, keep, action, label, new Date(), 'Pending', 0]);
+    SpreadsheetApp.getActiveSpreadsheet().toast(`Rule Registered: ${value}`, 'GFilter');
+  }
 }
 
 function getMatchValue(message, scopeType) {
@@ -362,7 +346,7 @@ function runBacklogEngine() {
   let workDone = false;
 
   for (let i = 1; i < data.length; i++) {
-    const [type, value, action, addit, date, status, count] = data[i];
+    const [type, value, keep, action, label, date, status, count] = data[i];
     
     if (status === 'Pending' || status === 'In Progress...') {
       const batchSize = 100;
@@ -371,16 +355,16 @@ function runBacklogEngine() {
 
       const threads = GmailApp.search(query, 0, batchSize);
       if (threads.length === 0) {
-        sheet.getRange(i + 1, 6).setValue('Complete');
-        sheet.getRange(i + 1, 6).setBackground('#d9ead3'); // Light Green
+        sheet.getRange(i + 1, 7).setValue('Complete');
+        sheet.getRange(i + 1, 7).setBackground('#d9ead3');
         continue;
       }
 
-      threads.forEach(t => executeAction(t, action));
+      threads.forEach(t => executeAction(t, keep, action, label));
       
       const newCount = (parseInt(count) || 0) + threads.length;
-      sheet.getRange(i + 1, 7).setValue(newCount);
-      sheet.getRange(i + 1, 6).setValue('In Progress...');
+      sheet.getRange(i + 1, 8).setValue(newCount);
+      sheet.getRange(i + 1, 7).setValue('In Progress...');
       
       // Update Stats
       incrementStat('TOTAL_PROCESSED', threads.length);
@@ -401,43 +385,38 @@ function incrementStat(key, val) {
   props.setProperty(key, (current + val).toString());
 }
 
-/**
- * Logic for rule execution (supports multi-actions like Star+Keep7d).
+ * Logic for rule execution (Categorical Model).
  */
-function executeAction(thread, action) {
-  if (!action) return;
+function executeAction(thread, keep, action, label) {
+  // 1. Apply Labeling
+  if (label && label !== 'Inbox') {
+    const labelName = `${CONFIG.LABEL_ROOT}/${label}`;
+    let l = GmailApp.getUserLabelByName(labelName);
+    if (!l) l = GmailApp.createLabel(labelName);
+    thread.addLabel(l);
+  }
+  if (label === 'Important') thread.markImportant();
+
+  // 2. Apply Retention Tag
+  if (keep) {
+    const keepName = `${CONFIG.LABEL_ROOT}/${keep}`;
+    let k = GmailApp.getUserLabelByName(keepName);
+    if (!k) k = GmailApp.createLabel(keepName);
+    thread.addLabel(k);
+  }
+
+  // 3. Main Disposition
+  switch (action) {
+    case 'Delete': thread.moveToTrash(); break;
+    case 'Spam': thread.moveToSpam(); break;
+    case 'Star': thread.addStar(); break;
+    case 'Archive': thread.moveToArchive(); break;
+    case 'CopyLabels': /* Logic handled during ingestion */ break;
+    case 'Inbox': /* Stay in Inbox */ break;
+  }
   
-  // Support '+' or ',' for multi-action combinations
-  const actions = action.toString().split(/[+,]/).map(s => s.trim());
-  let shouldArchive = false;
-
-  actions.forEach(act => {
-    switch (act) {
-      case 'Archive': thread.moveToArchive(); break;
-      case 'Delete': thread.moveToTrash(); break;
-      case 'Spam': thread.moveToSpam(); break;
-      case 'Star': thread.addStar(); break;
-      case 'Important': thread.markImportant(); break;
-      case 'Inbox': 
-      case 'CopyLabels': 
-        break; 
-      default:
-        // Dynamic Labeling (KeepNX, Work, etc)
-        const labelName = `${CONFIG.LABEL_ROOT}/${act}`;
-        let l = GmailApp.getUserLabelByName(labelName);
-        if (!l) {
-          try {
-            l = GmailApp.createLabel(labelName);
-            logAction(`Dynamic Label created: ${labelName}`);
-          } catch (e) { console.warn(`Dynamic label creation failed: ${e.message}`); }
-        }
-        if (l) thread.addLabel(l);
-        shouldArchive = true; // Most labels imply move out of Inbox
-        break;
-    }
-  });
-
-  if (shouldArchive) thread.moveToArchive();
+  // Default to Archive if we labeled/kept it and action is blank
+  if ((label || keep) && !action) thread.moveToArchive();
 }
 
 function convertToDays(period) {
@@ -499,7 +478,7 @@ function setupLabels() {
   }
   
   // Header/Table formatting removed - now handled by the GFilter Template.
-  const headers = ['Rule Type', 'Match Value', 'Action', 'Additional Labels', 'Date Created', 'Sync Status', 'Backlog Count'];
+  const headers = ['Source', 'Match Value', 'Keep', 'Action', 'Label', 'Date Created', 'Sync Status', 'Backlog Count'];
   const ruleSheet = getOrCreateSheet(ss, CONFIG.SHEET_RULES, headers);
   
   // Apply DATA VALIDATION (CHIPS) - Ensures chips exist if the sheet is wiped
@@ -560,9 +539,9 @@ function applyRules() {
 
   // Process rules from row 2 onwards
   for (let i = 1; i < rules.length; i++) {
-    const [type, value, action, additionalLabels, dateCreated, syncStatus] = rules[i];
+    const [type, value, keep, action, label, date, status] = rules[i];
     
-    if (!value || !action) continue;
+    if (!value || (!keep && !action && !label)) continue;
 
     // 1. Process New Incoming Mail (Inbox)
     const query = getQuery(type, value);
@@ -570,15 +549,7 @@ function applyRules() {
       const threads = GmailApp.search(`${query} label:inbox`);
       threads.forEach(thread => {
         try {
-          executeAction(thread, action);
-          if (additionalLabels) {
-            additionalLabels.split(',').forEach(labelName => {
-              try {
-                const l = GmailApp.getUserLabelByName(labelName.trim());
-                if (l) thread.addLabel(l);
-              } catch (e) { console.warn(`Label add failed: ${e.message}`); }
-            });
-          }
+          executeAction(thread, keep, action, label);
         } catch (e) {
           console.error(`Rule failed: ${e.message}`);
         }
