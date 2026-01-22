@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.3.3
+ * @version 1.3.4
  * @date 2026-01-21
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -55,6 +55,7 @@
  * v1.3.1 (2026-01-21): Retention Engine Refactor - Dynamic KeepNX tagging and robust historical processing.
  * v1.3.2 (2026-01-21): Multi-Action Support - Support for combined actions (e.g., Star+Keep7d).
  * v1.3.3 (2026-01-21): Smart Table Update - New 'Auto Labels' column with onEdit multi-select logic.
+ * v1.3.4 (2026-01-21): Native Chip UI - Automated high-end styled dropdowns and multi-select support.
  */
 
 const CONFIG = {
@@ -65,7 +66,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.3.3';
+const VERSION = 'v1.3.4';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -91,6 +92,7 @@ function onOpen() {
 
 /**
  * Multi-Select Logic: Appends selected values with a '+' instead of replacing.
+ * Optimized to handle both native chips (comma) and manual edits (+).
  */
 function onEdit(e) {
   const sheet = e.source.getActiveSheet();
@@ -101,7 +103,9 @@ function onEdit(e) {
   // Monitor 'Auto Labels' (Col 3) and 'Action' (Col 4) on 'Rules' sheet
   if (sheet.getName() === CONFIG.SHEET_RULES && (range.getColumn() === 3 || range.getColumn() === 4)) {
     if (val && oldVal && oldVal.indexOf(val) === -1) {
-      range.setValue(oldVal + '+' + val);
+      // Use comma if the cell already contains one (Chip UI), otherwise use '+'
+      const separator = oldVal.indexOf(',') > -1 ? ',' : '+'; 
+      range.setValue(oldVal + separator + val);
     }
   }
 }
@@ -489,7 +493,7 @@ function logAction(msg) {
  * The main automation engine. Scans Inbox for mail matching the GSheet rules.
  */
 /**
- * Formats the Rules sheet as a professional Table.
+ * Ensures the core GFilter labels exist in Gmail.
  */
 function setupLabels() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -500,23 +504,13 @@ function setupLabels() {
   if (currentName.indexOf('Copy of') > -1 || currentName.indexOf('TEMPLATE') > -1) {
     ss.rename('My GFilter™');
   }
-
+  
+  // Header/Table formatting removed - now handled by the GFilter Template.
   const headers = ['Rule Type', 'Match Value', 'Auto Labels', 'Action', 'Additional Labels', 'Date Created', 'Sync Status', 'Backlog Count'];
   const ruleSheet = getOrCreateSheet(ss, CONFIG.SHEET_RULES, headers);
   
-  // Format Table
-  ruleSheet.getRange(1, 1, 1, 8).setBackground('#f3f3f3').setFontWeight('bold').setBorder(true, true, true, true, true, true);
-  ruleSheet.setFrozenRows(1);
-  ruleSheet.setColumnWidth(1, 120);
-  ruleSheet.setColumnWidth(2, 250);
-  ruleSheet.setColumnWidth(3, 200);
-  ruleSheet.setColumnWidth(4, 150);
-  
-  // Banding (Alternating Colors)
-  try {
-    ruleSheet.getRange(1, 1, ruleSheet.getMaxRows(), 8).getBandings().forEach(b => b.remove());
-    ruleSheet.getRange(1, 1, ruleSheet.getMaxRows(), 8).applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY);
-  } catch (e) {}
+  // Apply DATA VALIDATION (CHIPS) - Ensures chips exist if the sheet is wiped
+  applyChipValidation(ruleSheet);
 
   const labelsToCreate = CONFIG.ACTIONS.map(a => `${CONFIG.LABEL_ROOT}/${a}`);
   labelsToCreate.forEach(labelName => {
@@ -534,7 +528,32 @@ function setupLabels() {
     // Root label might already exist, ignore error
   }
 
-  ui.alert('GFilter Setup', 'Initial labels have been created in Gmail. You can now start tagging emails with __auto/ labels!', ui.ButtonSet.OK);
+  ui.alert('GFilter Setup', 'Rules Engine has been initialized with Premium Chip UI. You can now use the styled dropdowns to build your rules!', ui.ButtonSet.OK);
+}
+
+/**
+ * Injects Google's high-end Chip UI into the Rules sheet.
+ */
+function applyChipValidation(sheet) {
+  const lastRow = 500; // Apply to first 500 rows
+  
+  // 1. Rule Type Chips (Col A)
+  const scopeRule = SpreadsheetApp.newDataValidation().requireValueInList(CONFIG.SCOPES)
+    .setAllowInvalid(false)
+    .build();
+  sheet.getRange(2, 1, lastRow).setDataValidation(scopeRule);
+
+  // 2. Action/AutoLabel Chips (Col C & D)
+  const actionList = [
+    'Archive', 'Delete', 'Spam', 'Star', 'Important', 'Inbox', 'CopyLabels',
+    'Keep1d', 'Keep7d', 'Keep1m', 'Keep3m', 'Keep6m', 'Keep1y', 'Keep3y', 'Keep7y',
+    'Bulk', 'Newsletter', 'Notify'
+  ];
+  const actionRule = SpreadsheetApp.newDataValidation().requireValueInList(actionList)
+    .setAllowInvalid(true) // Allow typing custom KeepNX
+    .build();
+  
+  sheet.getRange(2, 3, lastRow, 2).setDataValidation(actionRule);
 }
 
 function applyRules() {
