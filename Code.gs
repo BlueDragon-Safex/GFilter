@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.2.0
+ * @version 1.2.1
  * @date 2026-01-21
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -48,6 +48,7 @@
  * v1.1.8 (2026-01-21): Resilience Update - Added cache-busting & headers to resolve intermittent 404/DNS issues.
  * v1.1.9 (2026-01-21): Final Release Candidate - Verifying the resilient update delivery system.
  * v1.2.0 (2026-01-21): Bulletproof Release - Fixed "Double Code" leak by escaping HTML tags in delivery.
+ * v1.2.1 (2026-01-21): Pro Update Engine - Used JSON.stringify for "Native" safe code delivery.
  */
 
 const CONFIG = {
@@ -58,7 +59,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.2.0';
+const VERSION = 'v1.2.1';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -133,17 +134,22 @@ function showUpdateModal(version, code) {
              '<li>Go to <b>Extensions > Apps Script</b>.</li>' +
              '<li>Delete everything in <b>Code.gs</b> and <b>Paste</b> the new code.</li>' +
              '<li>Save and refresh this Google Sheet.</li></ol>' +
-             '<textarea id="codeBlock" readonly>' + code + '</te' + 'xtarea>' +
+             '<textarea id="codeBlock" readonly></textarea>' +
              '<div style="text-align: center;">' +
              '<button onclick="copyToClipboard()">Copy to Clipboard</button></div>' +
              '<div class="footer">Official Source: https://github.com/BlueDragon-Safex/GFilter</div>' +
              '<script>' +
-             'function copyToClipboard() {' +
-             '  var copyText = document.getElementById("codeBlock");' +
-             '  copyText.select();' +
-             '  document.execCommand("copy");' +
-             '  alert("Code copied! Now go to Apps Script, delete the old code, and paste this in.");' +
-             '}</script></body></html>';
+             '  (function() {' +
+             '    var rawCode = ' + JSON.stringify(code) + ';' +
+             '    document.getElementById("codeBlock").value = rawCode;' +
+             '  })();' +
+             '  function copyToClipboard() {' +
+             '    var copyText = document.getElementById("codeBlock");' +
+             '    copyText.select();' +
+             '    document.execCommand("copy");' +
+             '    alert("Code copied! Now go to Apps Script, delete the old code, and paste this in.");' +
+             '  }' +
+             '</script></body></html>';
   
   const output = HtmlService.createHtmlOutput(html)
     .setWidth(600)
