@@ -1,4 +1,4 @@
-# GFilter™ (v1.2.4) - Setup Guide
+# GFilter™ (v1.2.5) - Setup Guide
 
 > [!IMPORTANT]
 > **MANDATORY NOTICE**: This copyright and all attribution headers must remain intact to use this code. 
@@ -9,9 +9,11 @@ GFilter is now ready! This tool allows you to create Gmail filters and retention
 
 To get GFilter running in your own Google account:
 
-1.  **Create a New Google Sheet**: Go to [sheets.new](https://sheets.new).
-2.  **Open Apps Script**: Click on **Extensions** > **Apps Script**.
-3.  **Copy the Code**:
+### 1. Copy the Master Sheet
+First, get your own private copy of the automation hub:
+**[👉 Click Here to Copy GFilter™ Master Sheet](https://docs.google.com/spreadsheets/d/11a4TgC0ilAAcSVfSTq9z6gmDovPvLHZKx6FBa_rFkr0/copy?usp=sharing)**
+
+### 2. Open the Script Editor
     *   Copy everything from [Code.gs](./Code.gs) into the `Code.gs` file in the editor.
     *   (Optional but recommended) Click the gear icon (Project Settings), check "Show 'appsscript.json' manifest file", and replace its content with [appsscript.json](./appsscript.json).
 4.  **Save and Refresh**: Save the project (Ctrl+S) and refresh your Google Sheet.

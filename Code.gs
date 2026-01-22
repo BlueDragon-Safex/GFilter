@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.2.4
+ * @version 1.2.5
  * @date 2026-01-21
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -46,6 +46,7 @@
  * v1.2.2 (2026-01-21): Release Candidate - Final polishing and legal header refinement.
  * v1.2.3 (2026-01-21): Template Release - Used native Apps Script Templates for 100% reliable code delivery.
  * v1.2.4 (2026-01-21): Final Sign-off - Verifying the official template-based update delivery.
+ * v1.2.5 (2026-01-21): Trigger Fix & Master Link - Resolved 60min trigger bug and added official GSheet copy link.
  */
 
 const CONFIG = {
@@ -56,7 +57,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.2.4';
+const VERSION = 'v1.2.5';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -503,15 +504,17 @@ function setupTrigger() {
   const ui = SpreadsheetApp.getUi();
   const response = ui.prompt(
     'GFilter Automation Setup',
-    'How often should GFilter process your rules?\n\nEnter "10", "30", or "60" (minutes):',
+    'How often should GFilter process your rules?\n\nEnter "1", "5", "10", "15", "30", or "60" (minutes):',
     ui.ButtonSet.OK_CANCEL
   );
 
   if (response.getSelectedButton() !== ui.Button.OK) return;
 
   const frequency = parseInt(response.getResponseText());
-  if (![10, 30, 60].includes(frequency)) {
-    ui.alert('Invalid frequency. Please enter exactly 10, 30, or 60.');
+  const validFrequencies = [1, 5, 10, 15, 30, 60];
+  
+  if (!validFrequencies.includes(frequency)) {
+    ui.alert('Invalid frequency. Please enter 1, 5, 10, 15, 30, or 60.');
     return;
   }
 
@@ -520,16 +523,20 @@ function setupTrigger() {
   triggers.forEach(t => ScriptApp.deleteTrigger(t));
 
   // Set the main rule engine trigger
-  ScriptApp.newTrigger('applyRules')
-    .timeBased()
-    .everyMinutes(frequency)
-    .create();
+  let mainTrigger = ScriptApp.newTrigger('applyRules').timeBased();
+  if (frequency === 60) {
+    mainTrigger.everyHours(1).create();
+  } else {
+    mainTrigger.everyMinutes(frequency).create();
+  }
 
   // Set the "Sync Rules from Labels" trigger to run at the same frequency
-  ScriptApp.newTrigger('processAutoLabels')
-    .timeBased()
-    .everyMinutes(frequency)
-    .create();
+  let syncTrigger = ScriptApp.newTrigger('processAutoLabels').timeBased();
+  if (frequency === 60) {
+    syncTrigger.everyHours(1).create();
+  } else {
+    syncTrigger.everyMinutes(frequency).create();
+  }
 
   // Set the Janitor (Retention) trigger once a day at 2 AM
   ScriptApp.newTrigger('cleanUpRetention')

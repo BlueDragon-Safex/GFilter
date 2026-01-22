@@ -25,7 +25,10 @@ GFilter™ takes it from there. It "reads" your labels, saves the rule to your p
 ---
 
 ## 🛠 One-Minute Setup
-Ready to reclaim your Inbox? Follow our **[Step-by-Step Setup Guide](./walkthrough.md)** to get your private instance running in under 60 seconds.
+Ready to reclaim your Inbox? 
+
+1.  **[Click Here to Copy the Master GFilter™ Sheet](https://docs.google.com/spreadsheets/d/11a4TgC0ilAAcSVfSTq9z6gmDovPvLHZKx6FBa_rFkr0/copy?usp=sharing)**
+2.  Follow our **[Step-by-Step Setup Guide](./walkthrough.md)** to get your private instance running in under 60 seconds.
 
 ---
 
