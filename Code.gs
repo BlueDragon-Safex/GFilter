@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.3.2
+ * @version 1.3.3
  * @date 2026-01-21
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -53,7 +53,8 @@
  * v1.2.9 (2026-01-21): Auto-Branding - Forced rename to "My GFilter™" during initial setup.
  * v1.3.0 (2026-01-21): Visual & Branding Refresh - Menu emojis, update badges, and GFilter Hub Sidebar.
  * v1.3.1 (2026-01-21): Retention Engine Refactor - Dynamic KeepNX tagging and robust historical processing.
- * v1.3.2 (2026-01-21): Multi-Action Support - Support for combined actions (e.g., Star+Keep7d) via '+' separator.
+ * v1.3.2 (2026-01-21): Multi-Action Support - Support for combined actions (e.g., Star+Keep7d).
+ * v1.3.3 (2026-01-21): Smart Table Update - New 'Auto Labels' column with onEdit multi-select logic.
  */
 
 const CONFIG = {
@@ -64,7 +65,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.3.2';
+const VERSION = 'v1.3.3';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -77,8 +78,8 @@ function onOpen() {
   ui.createMenu(`GFilter (${VERSION})${updateBadge}`)
     .addItem('🚀 Launch GFilter Hub', 'showHub')
     .addSeparator()
-    .addItem('⚙️ Initialize / Refresh Labels', 'setupLabels')
-    .addItem('🔄 Sync Rules Manually', 'processAutoLabels')
+    .addItem('⚙️ Initialize Rules Engine', 'setupLabels')
+    .addItem('🔄 Sync Rules from Gmail', 'processAutoLabels')
     .addSeparator()
     .addItem('🧹 Run Historical Cleanup', 'cleanUpRetention')
     .addItem('⏰ Set Auto-Run Timer', 'setupTrigger')
@@ -86,6 +87,23 @@ function onOpen() {
     .addSeparator()
     .addItem(`✨ Check for Updates...${updateBadge}`, 'checkUpdates')
     .addToUi();
+}
+
+/**
+ * Multi-Select Logic: Appends selected values with a '+' instead of replacing.
+ */
+function onEdit(e) {
+  const sheet = e.source.getActiveSheet();
+  const range = e.range;
+  const val = e.value;
+  const oldVal = e.oldValue;
+
+  // Monitor 'Auto Labels' (Col 3) and 'Action' (Col 4) on 'Rules' sheet
+  if (sheet.getName() === CONFIG.SHEET_RULES && (range.getColumn() === 3 || range.getColumn() === 4)) {
+    if (val && oldVal && oldVal.indexOf(val) === -1) {
+      range.setValue(oldVal + '+' + val);
+    }
+  }
 }
 
 /**
@@ -273,32 +291,24 @@ function processAutoLabels() {
   const threads = Array.from(threadMap.values());
   if (threads.length === 0) return;
 
-  const ruleSheet = getOrCreateSheet(ss, CONFIG.SHEET_RULES, ['Rule Type', 'Match Value', 'Action', 'Additional Labels', 'Date Created']);
+  const headers = ['Rule Type', 'Match Value', 'Auto Labels', 'Action', 'Additional Labels', 'Date Created', 'Sync Status', 'Backlog Count'];
+  const ruleSheet = getOrCreateSheet(ss, CONFIG.SHEET_RULES, headers);
   
   threads.forEach(thread => {
     const labels = thread.getLabels().map(l => l.getName());
     const autoLabels = labels.filter(l => l.startsWith(CONFIG.LABEL_ROOT + '/'));
     
-    if (autoLabels.length < 2) return; // Need at least one scope and one action
+    if (autoLabels.length < 1) return; 
 
     const scopes = autoLabels.filter(l => CONFIG.SCOPES.includes(l.split('/')[1]));
-    const allActions = autoLabels.filter(l => CONFIG.ACTIONS.includes(l.split('/')[1]));
+    // Any __auto/ label that ISN'T a scope is an action/retention tag
+    const ruleActions = autoLabels.filter(l => !CONFIG.SCOPES.includes(l.split('/')[1]));
 
-    if (allActions.length === 0) {
-      const msg = 'Missing Action label (e.g., __auto/Archive or __auto/Inbox). Rule skipped.';
-      logAction(`Warning: ${msg}`);
-      ss.toast(msg, 'GFilter', 10);
-      return;
-    }
+    if (scopes.length === 0) return;
 
-    const hasCopyLabels = allActions.some(a => a.includes('CopyLabels'));
-    // The "real" actions are anything EXCEPT CopyLabels
-    let realActions = allActions.filter(a => !a.includes('CopyLabels'));
-    
-    // If CopyLabels was the ONLY action, default to 'Inbox'
-    if (realActions.length === 0) {
-      realActions = [CONFIG.LABEL_ROOT + '/Inbox'];
-    }
+    const hasCopyLabels = ruleActions.some(a => a.includes('CopyLabels'));
+    const cleanActions = ruleActions.map(a => a.split('/')[1]);
+    const actionStr = cleanActions.join('+');
 
     const message = thread.getMessages()[0];
     
@@ -306,12 +316,9 @@ function processAutoLabels() {
       const scopeType = s.split('/')[1];
       const matchValue = getMatchValue(message, scopeType);
       
-      realActions.forEach(a => {
-        const actionType = a.split('/')[1];
-        // Only include non-auto labels in the "Additional Labels" list
-        const labelsToCopy = hasCopyLabels ? labels.filter(l => !l.startsWith(CONFIG.LABEL_ROOT)) : [];
-        addRule(ruleSheet, scopeType, matchValue, actionType, labelsToCopy);
-      });
+      // Get any existing user labels (non-auto) if CopyLabels is present
+      const labelsToCopy = hasCopyLabels ? labels.filter(l => !l.startsWith(CONFIG.LABEL_ROOT)) : [];
+      addRule(ruleSheet, scopeType, matchValue, actionStr, labelsToCopy);
     });
 
     // Cleanup labels after processing
@@ -344,16 +351,18 @@ function getMatchValue(message, scopeType) {
   }
 }
 
-function addRule(sheet, type, value, action, allLabels) {
+function addRule(sheet, type, value, actionStr, allLabels) {
   const data = sheet.getDataRange().getValues();
-  const exists = data.some(row => row[0] === type && row[1] === value && row[2] === action);
+  // Check if rule exists (Match Col A, B, and the Action string in C)
+  const exists = data.some(row => row[0] === type && row[1] === value && row[2] === actionStr);
   
   if (!exists) {
     const additional = allLabels.filter(l => !l.startsWith(CONFIG.LABEL_ROOT)).join(', ');
-    sheet.appendRow([type, value, action, additional, new Date(), 'Pending', 0]);
+    // New Order: Type(1), Value(2), AutoLabels(3), Action(4), Additional(5), Date(6), Status(7), Count(8)
+    sheet.appendRow([type, value, actionStr, '', additional, new Date(), 'Pending', 0]);
     
-    // Trigger Initial Historical Run (First 100)
-    applyRuleToHistory(sheet, sheet.getLastRow(), type, value, action, additional);
+    // Trigger Initial Historical Run
+    applyRuleToHistory(sheet, sheet.getLastRow(), type, value, actionStr, additional);
     
     sheet.activate();
     SpreadsheetApp.getActiveSpreadsheet().toast(`Rule Created & Historical Sync Started for ${value}`, 'GFilter');
@@ -479,15 +488,35 @@ function logAction(msg) {
 /**
  * The main automation engine. Scans Inbox for mail matching the GSheet rules.
  */
+/**
+ * Formats the Rules sheet as a professional Table.
+ */
 function setupLabels() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const ui = SpreadsheetApp.getUi();
   
-  // Auto-Branding: Rename if this is a fresh copy
+  // Auto-Branding
   const currentName = ss.getName();
   if (currentName.indexOf('Copy of') > -1 || currentName.indexOf('TEMPLATE') > -1) {
     ss.rename('My GFilter™');
   }
+
+  const headers = ['Rule Type', 'Match Value', 'Auto Labels', 'Action', 'Additional Labels', 'Date Created', 'Sync Status', 'Backlog Count'];
+  const ruleSheet = getOrCreateSheet(ss, CONFIG.SHEET_RULES, headers);
+  
+  // Format Table
+  ruleSheet.getRange(1, 1, 1, 8).setBackground('#f3f3f3').setFontWeight('bold').setBorder(true, true, true, true, true, true);
+  ruleSheet.setFrozenRows(1);
+  ruleSheet.setColumnWidth(1, 120);
+  ruleSheet.setColumnWidth(2, 250);
+  ruleSheet.setColumnWidth(3, 200);
+  ruleSheet.setColumnWidth(4, 150);
+  
+  // Banding (Alternating Colors)
+  try {
+    ruleSheet.getRange(1, 1, ruleSheet.getMaxRows(), 8).getBandings().forEach(b => b.remove());
+    ruleSheet.getRange(1, 1, ruleSheet.getMaxRows(), 8).applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY);
+  } catch (e) {}
 
   const labelsToCreate = CONFIG.ACTIONS.map(a => `${CONFIG.LABEL_ROOT}/${a}`);
   labelsToCreate.forEach(labelName => {
@@ -518,8 +547,11 @@ function applyRules() {
 
   // Process rules from row 2 onwards
   for (let i = 1; i < rules.length; i++) {
-    const [type, value, action, additionalLabels, dateCreated, syncStatus] = rules[i];
-    if (!value || !action) continue;
+    const [type, value, autoLabels, action, additionalLabels, dateCreated, syncStatus] = rules[i];
+    
+    // Priority: Use Column C (Auto Labels) if Column D (Action) is blank
+    const combinedAction = (autoLabels || '') + (action ? '+' + action : '');
+    if (!value || !combinedAction) continue;
 
     // 1. Process New Incoming Mail (Inbox)
     const query = getQuery(type, value);
