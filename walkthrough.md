@@ -1,4 +1,4 @@
-# GFilter™ (v1.2.6) - Setup Guide
+# GFilter™ (v1.2.8) - Setup Guide
 
 > [!IMPORTANT]
 > **MANDATORY NOTICE**: This copyright and all attribution headers must remain intact to use this code. 

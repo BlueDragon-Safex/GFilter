@@ -1,6 +1,6 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.2.7
+ * @version 1.2.8
  * @date 2026-01-21
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
@@ -49,6 +49,7 @@
  * v1.2.5 (2026-01-21): Trigger Fix & Master Link - Resolved 60min trigger bug and added official GSheet copy link.
  * v1.2.6 (2026-01-21): Automation Picklist - Upgraded trigger setup to a professional HTML choice dialog.
  * v1.2.7 (2026-01-21): Premium Radio UI - Switched to radio buttons with enhanced spacing and padding.
+ * v1.2.8 (2026-01-21): Final UI Polish - Increased modal height for a scroll-free experience.
  */
 
 const CONFIG = {
@@ -59,7 +60,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.2.7';
+const VERSION = 'v1.2.8';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -537,7 +538,7 @@ function setupTrigger() {
                '  }' +
                '</script></body></html>';
   
-  const output = HtmlService.createHtmlOutput(html).setWidth(480).setHeight(380);
+  const output = HtmlService.createHtmlOutput(html).setWidth(480).setHeight(450);
   SpreadsheetApp.getUi().showModalDialog(output, 'Automation Settings');
 }
 
