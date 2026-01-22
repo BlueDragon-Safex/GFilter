@@ -1,7 +1,7 @@
 /**
  * @fileoverview GFilter - The Intelligent Gmail Filter Engine.
- * @version 1.5.2
- * @date 2026-01-21
+ * @version 1.6.0
+ * @date 2026-01-22
  * @copyright (c) 2026 123 PROPERTY INVESTMENT GROUP, INC. All Rights Reserved.
  * @license Proprietary
  * @author 123 PROPERTY INVESTMENT GROUP, INC.
@@ -62,6 +62,7 @@
  * v1.5.0 (2026-01-21): Categorical Engine - 4-way Pick One structure (Keep/Action/Label/Source).
  * v1.5.1 (2026-01-21): Perfect Alignment - 9-column structure matching user template.
  * v1.5.2 (2026-01-21): Deep Sync - Scans up to 300 threads for robust rule ingestion.
+ * v1.6.0 (2026-01-22): Persistent Engine - Retroactive labeling and persistent tags.
  */
 
 const CONFIG = {
@@ -72,7 +73,7 @@ const CONFIG = {
   ACTIONS: ['Archive', 'Delete', 'Spam', 'Bulk', 'Newsletter', 'Notify', 'Important', 'Star', 'Inbox', 'CopyLabels']
 };
 
-const VERSION = 'v1.5.2';
+const VERSION = 'v1.6.0';
 
 /**
  * Adds a custom menu to the Google Sheet.
@@ -291,9 +292,11 @@ function processAutoLabels() {
     // Add Categorical Rule (9 Columns)
     addCategoricalRule(ruleSheet, scopeType, matchValue, keepVal, actionVal, labelVal, additional);
 
-    // Cleanup labels
-    autoLabels.forEach(l => { try { thread.removeLabel(GmailApp.getUserLabelByName(l)); } catch (e) {} });
+    // Labels are now PERSISTENT - No removal after ingestion.
   });
+  
+  // Retroactive Trigger: Start processing history immediately
+  runBacklogEngine();
 }
 
 function addCategoricalRule(sheet, type, value, keep, action, label, additional) {
@@ -356,28 +359,62 @@ function runBacklogEngine() {
       if (!query) continue;
 
       const threads = GmailApp.search(query, 0, batchSize);
-      if (threads.length === 0) {
-        sheet.getRange(i + 1, 8).setValue('Complete');
-        sheet.getRange(i + 1, 8).setBackground('#d9ead3');
-        continue;
+      // 1. Batch Label Application (Massive Performance Boost)
+      if (label && label !== 'Inbox') {
+        const l = getLabelSafe(`${CONFIG.LABEL_ROOT}/${label}`);
+        if (l) l.addToThreads(threads);
+      }
+      if (keep) {
+        const k = getLabelSafe(`${CONFIG.LABEL_ROOT}/${keep}`);
+        if (k) k.addToThreads(threads);
+      }
+      if (addit) {
+        addit.split(',').forEach(lName => {
+          const al = getLabelSafe(lName.trim(), false); // Don't auto-create user labels under root
+          if (al) al.addToThreads(threads);
+        });
       }
 
-      threads.forEach(t => executeAction(t, keep, action, label, addit));
+      // 2. Individual thread actions
+      threads.forEach(t => {
+        if (label === 'Important') t.markImportant();
+        switch (action) {
+          case 'Delete': t.moveToTrash(); break;
+          case 'Spam': t.moveToSpam(); break;
+          case 'Star': t.addStar(); break;
+          case 'Archive': t.moveToArchive(); break;
+        }
+        if ((label || keep) && (!action || action === 'Archive')) t.moveToArchive();
+      });
       
       const newCount = (parseInt(count) || 0) + threads.length;
       sheet.getRange(i + 1, 9).setValue(newCount);
       sheet.getRange(i + 1, 8).setValue('In Progress...');
       
+      SpreadsheetApp.flush(); 
+      
       // Update Stats
       incrementStat('TOTAL_PROCESSED', threads.length);
       workDone = true;
-      break; // One rule per batch to avoid timeouts
+      break; 
     }
   }
 
-  // Chaining Logic: If work was done, check if we need to schedule another run
   if (workDone) {
     updateDashboard();
+  }
+}
+
+function getLabelSafe(name, autoCreate = true) {
+  try {
+    let l = GmailApp.getUserLabelByName(name);
+    if (!l && autoCreate) {
+      l = GmailApp.createLabel(name);
+    }
+    return l;
+  } catch (e) {
+    console.warn(`Label error: ${name} - ${e.message}`);
+    return null;
   }
 }
 
